@@ -309,6 +309,7 @@ export function startServer() {
   Bun.serve({
     hostname: config.host,
     port: config.port,
+    idleTimeout: 120, // default 10s would kill sse streams between 15s heartbeats
     async fetch(req) {
       try {
         return await route(req)

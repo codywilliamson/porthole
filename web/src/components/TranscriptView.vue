@@ -54,6 +54,7 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: clip; /* wide content scrolls inside pre/table wrappers, never the transcript */
   -webkit-overflow-scrolling: touch;
   padding: var(--space-4);
   padding-left: calc(var(--space-4) + var(--safe-left));

@@ -8,7 +8,13 @@ const props = defineProps<{ item: DisplayItem }>()
 
 const expanded = ref(false)
 
-const toolName = computed(() => (props.item.kind === 'tool_pair' ? (props.item.use?.name ?? 'tool') : ''))
+// mcp tool names are huge (mcp__server__tool) — show the last segment, keep full name in title
+const toolName = computed(() => {
+  if (props.item.kind !== 'tool_pair') return ''
+  const name = props.item.use?.name ?? 'tool'
+  return name.startsWith('mcp__') ? (name.split('__').pop() ?? name) : name
+})
+const toolNameFull = computed(() => (props.item.kind === 'tool_pair' ? (props.item.use?.name ?? 'tool') : ''))
 const toolInputHint = computed(() =>
   props.item.kind === 'tool_pair' && props.item.use ? toolHint(props.item.use.input) : '',
 )
@@ -44,7 +50,7 @@ function toggle() {
   <div v-else-if="item.kind === 'tool_pair'" class="ev ev-tool" :class="{ 'is-error': isError }">
     <button class="ev-disclosure" type="button" :aria-expanded="expanded" @click="toggle">
       <span class="ev-chevron" :class="{ 'is-open': expanded }" aria-hidden="true">›</span>
-      <span class="ev-tool-name mono">{{ toolName }}</span>
+      <span class="ev-tool-name mono" :title="toolNameFull">{{ toolName }}</span>
       <span v-if="toolInputHint" class="ev-tool-hint mono">{{ toolInputHint }}</span>
       <span class="ev-tool-flag-wrap">
         <span v-if="isError" class="ev-tool-flag ev-tool-flag-error">error</span>
@@ -79,6 +85,7 @@ function toggle() {
 
 .ev-md {
   line-height: 1.65;
+  overflow-wrap: anywhere; /* long urls/tokens wrap instead of pushing the layout */
 }
 
 .ev-md :deep(p) {
@@ -126,6 +133,22 @@ function toggle() {
   background: none;
   border: none;
   padding: 0;
+}
+
+.ev-md :deep(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-collapse: collapse;
+  margin: 0 0 var(--space-3);
+}
+
+.ev-md :deep(th),
+.ev-md :deep(td) {
+  border: 1px solid var(--line);
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
 }
 
 .ev-md :deep(blockquote) {
@@ -230,6 +253,10 @@ function toggle() {
 
 .ev-tool-name {
   flex: 0 0 auto;
+  max-width: 45%; /* full name unless huge; hint truncates first */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--accent-strong);
   font-size: var(--text-sm);
 }

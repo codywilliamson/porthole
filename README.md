@@ -4,7 +4,10 @@ Mobile-first web viewer and reply relay for Claude Code sessions running in tmux
 over Tailscale. Review long responses on your phone, jump between sessions, and reply
 into the right terminal.
 
-![screenshot placeholder](docs/screenshot.png)
+<p align="center">
+  <img src="docs/screenshot-list.png" alt="session list" width="45%">
+  <img src="docs/screenshot-session.png" alt="live transcript" width="45%">
+</p>
 
 ## features
 
