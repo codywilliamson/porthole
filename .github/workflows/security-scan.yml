@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   security-scan:
-    uses: codywilliamson/repo-sentinel/.github/workflows/security-scan.yml@main
+    uses: codywilliamson/repo-sentinel/.github/workflows/security-scan.yml@v0.2.2
     with:
       ## minimum severity to create issues for (LOW, MEDIUM, HIGH, CRITICAL)
       severity-threshold: "MEDIUM"
