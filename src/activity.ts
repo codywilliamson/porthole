@@ -68,13 +68,14 @@ function isClaude(info: ProcInfo): boolean {
   return false
 }
 
-// find first claude process anywhere in the pane_pid's descendant tree
+// find first claude process in the pane_pid's tree — including pane_pid itself:
+// `tmux new-window 'claude ...'` makes the pane process claude directly, no shell parent
 function findClaudeDescendant(
   panePid: number,
   children: Map<number, number[]>,
   table: Map<number, ProcInfo>,
 ): number | null {
-  const stack = [...(children.get(panePid) ?? [])]
+  const stack = [panePid]
   while (stack.length > 0) {
     const pid = stack.pop()!
     const info = table.get(pid)
