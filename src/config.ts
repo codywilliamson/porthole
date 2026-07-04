@@ -6,4 +6,9 @@ export const config = {
   port: Number(process.env.PORTHOLE_PORT ?? 4747),
   pollMs: Number(process.env.PORTHOLE_POLL_MS ?? 2000),
   projectsDir: process.env.PORTHOLE_PROJECTS_DIR ?? `${os.homedir()}/.claude/projects`,
+  // optional dns-rebinding defense: comma-separated host[:port] allowlist for the Host header
+  allowedHosts: (process.env.PORTHOLE_ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
 }

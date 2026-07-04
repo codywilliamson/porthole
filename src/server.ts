@@ -255,10 +255,37 @@ async function serveStatic(pathname: string): Promise<Response> {
   return new Response('not found', { status: 404, headers: { 'content-type': 'text/plain' } })
 }
 
+// csrf/dns-rebinding guard: same-origin + json content-type on writes,
+// optional Host allowlist (no auth by design — tailscale is the perimeter,
+// but the phone's browser lives inside it, so block cross-site posts)
+function crossSiteBlock(req: Request): Response | null {
+  const host = (req.headers.get('host') ?? '').toLowerCase()
+  if (config.allowedHosts.length && !config.allowedHosts.includes(host)) {
+    return json({ error: 'host not allowed' }, 403)
+  }
+  if (req.method === 'GET' || req.method === 'HEAD') return null
+  const origin = req.headers.get('origin')
+  if (origin) {
+    try {
+      if (new URL(origin).host.toLowerCase() !== host) return json({ error: 'bad origin' }, 403)
+    } catch {
+      return json({ error: 'bad origin' }, 403)
+    }
+  }
+  const contentType = req.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    return json({ error: 'content-type must be application/json' }, 415)
+  }
+  return null
+}
+
 // route table — thin dispatch, domain logic lives in the modules
 async function route(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const { pathname } = url
+
+  const blocked = crossSiteBlock(req)
+  if (blocked) return blocked
 
   if (pathname === '/api/sessions' && req.method === 'GET') return handleSessions()
 
