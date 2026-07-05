@@ -170,9 +170,11 @@ export async function getActiveTargets(
   }
 
   for (const [cwd, group] of byCwd) {
-    const candidates = sessions
-      .filter((s) => s.projectPath === cwd && !usedSessions.has(s.id))
-      .sort((a, b) => b.lastModified - a.lastModified)
+    const inCwd = sessions.filter((s) => s.projectPath === cwd && !usedSessions.has(s.id))
+    // hook/sdk side sessions (entrypoint sdk-*) share the cwd but never own a pane —
+    // only interactive cli sessions qualify; fall back to all if entrypoint is unknown
+    const cli = inCwd.filter((s) => s.entrypoint === 'cli')
+    const candidates = (cli.length ? cli : inCwd).sort((a, b) => b.lastModified - a.lastModified)
     const orderedPanes = group.sort((a, b) =>
       a.pane.target.localeCompare(b.pane.target),
     )

@@ -54,7 +54,10 @@ Claude Code can show up as tmux `pane_current_command` `"node"` OR native `"clau
 The claude process does **not** reliably keep its `.jsonl` fd open, so fd-matching
 (`/proc/<pid>/fd`) is best-effort only, tried first as an exact match. The reliable
 signal is: claude-process cwd -> session `projectPath` -> newest `.jsonl` in that
-project dir.
+project dir, **filtered to `entrypoint: "cli"` sessions**. Hook/SDK side sessions
+(security reviews, /gac analyzers — `entrypoint: "sdk-py"` etc) write jsonl into the
+same project dir and frequently become the newest file; without the cli filter they
+steal the pane mapping and the real session flips "inactive" mid-use.
 
 jsonl schema drifts across Claude Code versions — parse defensively (`transcript.ts`'s
 `eventsFromObj`), unknown event types are silently ignored, never thrown on.

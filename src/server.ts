@@ -36,9 +36,9 @@ async function loadSessions(): Promise<{ sessions: DiscoveredSession[]; targets:
   return { sessions, targets }
 }
 
-// merge active/tmuxTarget and strip internal filePath
+// merge active/tmuxTarget and strip internal fields
 function toSummary(s: DiscoveredSession, targets: Map<string, string>): SessionSummary {
-  const { filePath: _filePath, ...rest } = s
+  const { filePath: _filePath, entrypoint: _entrypoint, ...rest } = s
   return { ...rest, active: targets.has(s.id), tmuxTarget: targets.get(s.id) ?? null }
 }
 

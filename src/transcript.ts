@@ -5,6 +5,9 @@ import type { SessionSummary, TranscriptEvent } from '../shared/types'
 
 export interface DiscoveredSession extends Omit<SessionSummary, 'active' | 'tmuxTarget'> {
   filePath: string
+  // 'cli' = interactive terminal session; 'sdk-py' etc = hook/sdk side sessions
+  // that share the same cwd but can never own a tmux pane
+  entrypoint: string
 }
 
 const TITLE_MAX = 80
@@ -22,6 +25,7 @@ interface RawLine {
   isSidechain?: boolean
   isMeta?: boolean
   aiTitle?: string
+  entrypoint?: string
   message?: { role?: string; content?: unknown }
 }
 
@@ -41,6 +45,7 @@ interface ContentBlock {
 interface Meta {
   title: string
   projectPath: string
+  entrypoint: string
   eventCount: number
 }
 
@@ -163,6 +168,7 @@ function deriveMeta(raw: string): Meta {
   let lastTitle = ''
   let firstUserText = ''
   let projectPath = ''
+  let entrypoint = ''
   let eventCount = 0
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
@@ -175,6 +181,7 @@ function deriveMeta(raw: string): Meta {
     }
     if (obj?.type === 'ai-title' && typeof obj.aiTitle === 'string') lastTitle = obj.aiTitle
     if (!projectPath && typeof obj?.cwd === 'string' && obj.cwd) projectPath = obj.cwd
+    if (!entrypoint && typeof obj?.entrypoint === 'string' && obj.entrypoint) entrypoint = obj.entrypoint
     const events = eventsFromObj(obj)
     eventCount += events.length
     if (!firstUserText) {
@@ -185,6 +192,7 @@ function deriveMeta(raw: string): Meta {
   return {
     title: lastTitle ? toTitle(lastTitle) : toTitle(firstUserText),
     projectPath,
+    entrypoint,
     eventCount,
   }
 }
@@ -236,6 +244,7 @@ export async function discoverSessions(projectsDir: string): Promise<DiscoveredS
             lastModified: st.mtimeMs,
             eventCount: meta.eventCount,
             projectPath: meta.projectPath,
+            entrypoint: meta.entrypoint,
             title: meta.title,
           }
         }),
