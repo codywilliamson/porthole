@@ -61,7 +61,12 @@ async function resume() {
   resuming.value = true
   errorMsg.value = null
   try {
-    const res = await fetch(`/api/sessions/${encodeURIComponent(props.sessionId)}/resume`, { method: 'POST' })
+    // content-type required or the cross-site guard rejects it with 415
+    const res = await fetch(`/api/sessions/${encodeURIComponent(props.sessionId)}/resume`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })
     if (res.status === 409) {
       errorMsg.value = 'already active'
       return

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useSessions, listAnimated } from '../composables/useSessions'
 import { goToSession } from '../composables/useRoute'
 import { relativeTime, truncateMiddle } from '../utils/format'
+import LauncherSheet from './LauncherSheet.vue'
 
 const { sessions, loading, error, refresh } = useSessions()
+
+const showLauncher = ref(false)
 
 const activeSessions = computed(() => sessions.value.filter((s) => s.active))
 const recentSessions = computed(() =>
@@ -119,6 +122,14 @@ const rowEnter = (i: number) =>
         </section>
       </template>
     </div>
+
+    <button class="sl-fab" type="button" aria-label="launch a session" @click="showLauncher = true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" stroke-linecap="round" />
+      </svg>
+    </button>
+
+    <LauncherSheet v-if="showLauncher" @close="showLauncher = false" />
   </div>
 </template>
 
@@ -340,6 +351,34 @@ const rowEnter = (i: number) =>
 
 .row-leave-to {
   opacity: 0;
+}
+
+.sl-fab {
+  position: absolute;
+  right: calc(var(--space-5) + var(--safe-right));
+  bottom: calc(var(--space-5) + var(--safe-bottom));
+  z-index: 30;
+  width: 58px;
+  height: 58px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent-line);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 28px rgba(255, 180, 84, 0.28), 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.sl-fab:active {
+  transform: scale(0.93);
+}
+
+.sl-fab svg {
+  width: 26px;
+  height: 26px;
 }
 
 @media (prefers-reduced-motion: reduce) {
