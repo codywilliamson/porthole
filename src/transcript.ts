@@ -13,8 +13,18 @@ export interface DiscoveredSession extends Omit<SessionSummary, 'active' | 'tmux
 const TITLE_MAX = 80
 const UNTITLED = '(untitled)'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-// synthetic slash-command messages we never want to show as user text
-const COMMAND_PREFIXES = ['<command-name>', '<command-message>', '<local-command', '<local-command-caveat']
+// harness-injected user-role messages that aren't things the human typed:
+// slash-command wrappers, and subagent/hook notifications the runtime feeds back
+// (task-notifications wrap a subagent's result, so they'd otherwise render as a
+// message the user "sent")
+const COMMAND_PREFIXES = [
+  '<command-name>',
+  '<command-message>',
+  '<local-command',
+  '<local-command-caveat',
+  '<task-notification>',
+  '<system-reminder>',
+]
 
 // loose shape of a raw jsonl line — schema drifts across cc versions, stay defensive
 interface RawLine {
