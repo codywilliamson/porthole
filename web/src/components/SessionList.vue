@@ -10,6 +10,12 @@ const activeSessions = computed(() => sessions.value.filter((s) => s.active))
 const recentSessions = computed(() =>
   [...sessions.value].filter((s) => !s.active).sort((a, b) => b.lastModified - a.lastModified),
 )
+
+// stagger only the first screenful — with 100+ sessions an unbounded
+// i * 45 delay leaves the tail invisible for seconds
+const STAGGER_MS = 45
+const STAGGER_CAP = 12
+const enterDelay = (i: number) => Math.min(i, STAGGER_CAP) * STAGGER_MS
 </script>
 
 <template>
@@ -53,7 +59,7 @@ const recentSessions = computed(() =>
               :key="s.id"
               v-motion
               :initial="{ opacity: 0, y: 14 }"
-              :enter="{ opacity: 1, y: 0, transition: { duration: 320, delay: i * 45 } }"
+              :enter="{ opacity: 1, y: 0, transition: { duration: 320, delay: enterDelay(i) } }"
               class="sl-row"
               type="button"
               @click="goToSession(s.id)"
@@ -82,7 +88,7 @@ const recentSessions = computed(() =>
               :key="s.id"
               v-motion
               :initial="{ opacity: 0, y: 14 }"
-              :enter="{ opacity: 1, y: 0, transition: { duration: 320, delay: (activeSessions.length + i) * 45 } }"
+              :enter="{ opacity: 1, y: 0, transition: { duration: 320, delay: enterDelay(activeSessions.length + i) } }"
               class="sl-row"
               type="button"
               @click="goToSession(s.id)"
