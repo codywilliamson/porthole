@@ -15,8 +15,26 @@ const NEW_TARGET_FORMAT = '#{session_name}:#{window_index}.#{pane_index}'
 // fallback session name when no tmux server is running yet
 const FALLBACK_SESSION = 'main'
 
-// the only keys the ui is allowed to inject — never arbitrary strings
-export type TmuxKey = 'Enter' | 'Escape' | 'Down' | 'Up' | 'Space' | 'Tab'
+// the only keys the ui is allowed to inject — never arbitrary strings.
+// digits 1-9 answer AskUserQuestion pickers (option jump / toggle); Right moves
+// a multiSelect picker to its Submit tab.
+export type TmuxKey =
+  | 'Enter'
+  | 'Escape'
+  | 'Down'
+  | 'Up'
+  | 'Space'
+  | 'Tab'
+  | 'Right'
+  | '1'
+  | '2'
+  | '3'
+  | '4'
+  | '5'
+  | '6'
+  | '7'
+  | '8'
+  | '9'
 
 let bufferCounter = 0
 
@@ -117,6 +135,14 @@ export async function sendKeys(target: string, keys: TmuxKey[]): Promise<void> {
     if (i > 0) await Bun.sleep(INTER_KEY_DELAY_MS)
     await sendKey(target, keys[i])
   }
+}
+
+// read the visible contents of a pane (read-only). used to detect a live
+// AskUserQuestion picker, which claude buffers out of the jsonl until answered.
+export async function capturePane(target: string): Promise<string> {
+  if (!TARGET_RE.test(target)) throw new Error(`invalid tmux target: ${target}`)
+  const { code, stdout } = await runTmuxCapture(['capture-pane', '-t', target, '-p'])
+  return code === 0 ? stdout : ''
 }
 
 // open a new tmux window running claude in cwd; returns its pane target.

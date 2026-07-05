@@ -4,9 +4,18 @@ import { resolve, sep } from 'node:path'
 import { config } from './config'
 import { discoverSessions, parseLine, type DiscoveredSession } from './transcript'
 import { getActiveTargets, paneHasClaude } from './activity'
-import { sendToPane, resumeSession, launchClaude, killWindow, sendKey, type TmuxKey } from './tmux'
+import {
+  sendToPane,
+  resumeSession,
+  launchClaude,
+  killWindow,
+  sendKey,
+  sendKeys,
+  capturePane,
+  type TmuxKey,
+} from './tmux'
 import { knownProjects, listDirs, isLaunchableDir } from './projects'
-import type { SessionSummary, TranscriptEvent, NudgeKey } from '../shared/types'
+import type { SessionSummary, TranscriptEvent, NudgeKey, AskQuestion } from '../shared/types'
 
 // tuning knobs
 const HEARTBEAT_MS = 15_000
@@ -398,6 +407,129 @@ async function handleClose(id: string): Promise<Response> {
   }
 }
 
+// --- AskUserQuestion answering ---
+//
+// claude buffers the AskUserQuestion assistant message out of the jsonl until
+// the tool resolves — the tool_use + tool_result land together at answer time,
+// so a *pending* question is never visible in the transcript (empirically
+// verified). the only live signal is the tmux pane, so we detect + validate
+// against a capture-pane of the picker.
+
+// an option line: `❯ 1. Red` (single) or `  2. [ ] Cheese` (multiSelect)
+const PICKER_OPT_RE = /^[\s❯>]*(\d+)\.\s+(?:\[[ xX✔]\]\s+)?(.+?)\s*$/
+// the picker auto-appends these after the model's options — never answerable
+const PICKER_AUTO_LABEL = /^(Type something\.?|Chat about this)$/
+const PICKER_RULE_RE = /^[─—-]{3,}$/
+
+// parse an AskUserQuestion picker out of pane text; null when no picker is up.
+// only the currently-focused question tab is visible/parseable — which is the
+// one a fresh single-question picker starts on.
+function parsePicker(pane: string): AskQuestion | null {
+  const lines = pane.split('\n')
+  const footerIdx = lines.findIndex((l) => /to navigate/.test(l) && /cancel/i.test(l))
+  if (footerIdx < 0) return null
+
+  const multiSelect =
+    lines.some((l) => /^[\s❯>]*\d+\.\s+\[[ xX✔]\]/.test(l)) || lines.some((l) => /✔\s*Submit/.test(l))
+
+  const headerLine = lines.find((l) => /[☐☒]/.test(l))
+  const header = headerLine
+    ? headerLine
+        .slice(headerLine.search(/[☐☒]/) + 1)
+        .replace(/✔\s*Submit.*$/, '')
+        .replace(/→.*$/, '')
+        .replace(/[☐☒]/g, '')
+        .trim() || undefined
+    : undefined
+
+  const options: { label: string; description?: string }[] = []
+  const questionParts: string[] = []
+  let lastOpt: { label: string; description?: string } | null = null
+  let seenOption = false
+  const startIdx = headerLine ? lines.indexOf(headerLine) + 1 : 0
+
+  for (let i = startIdx; i < footerIdx; i++) {
+    const raw = lines[i]
+    const line = raw.trim()
+    if (!line || PICKER_RULE_RE.test(line)) continue
+    const m = raw.match(PICKER_OPT_RE)
+    if (m) {
+      seenOption = true
+      const label = m[2].trim()
+      if (PICKER_AUTO_LABEL.test(label)) {
+        lastOpt = null // skip auto option + its trailing description line
+        continue
+      }
+      lastOpt = { label }
+      options.push(lastOpt)
+    } else if (!seenOption) {
+      questionParts.push(line)
+    } else if (lastOpt && !lastOpt.description && line !== 'Submit') {
+      lastOpt.description = line
+    }
+  }
+
+  if (options.length === 0) return null
+  return { question: questionParts.join(' ').trim(), header, multiSelect, options }
+}
+
+// derive the tmux key sequence for an answer, per the empirically-probed TUI:
+// single-select → the option's number selects AND auto-submits; multiSelect →
+// toggle each number, Right to the Submit tab, Enter to confirm.
+function answerKeys(question: AskQuestion, optionIndexes: number[]): TmuxKey[] | null {
+  const n = question.options.length
+  if (new Set(optionIndexes).size !== optionIndexes.length) return null
+  for (const oi of optionIndexes) if (oi < 0 || oi >= n || oi + 1 > 9) return null
+  const digits = optionIndexes.map((oi) => String(oi + 1) as TmuxKey)
+  if (!question.multiSelect) return optionIndexes.length === 1 ? [digits[0]] : null
+  return [...digits, 'Right', 'Enter']
+}
+
+async function handleQuestion(id: string): Promise<Response> {
+  if (!UUID_RE.test(id)) return json({ question: null, error: 'invalid session id' }, 400)
+  const { targets } = await loadSessions()
+  const target = targets.get(id)
+  if (!target) return json({ question: null })
+  const pane = await capturePane(target)
+  return json({ question: parsePicker(pane) })
+}
+
+async function handleAnswer(id: string, req: Request): Promise<Response> {
+  if (!UUID_RE.test(id)) return json({ ok: false, error: 'invalid session id' }, 400)
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    body = null
+  }
+  const optionIndexes = (body as { optionIndexes?: unknown } | null)?.optionIndexes
+  if (
+    !Array.isArray(optionIndexes) ||
+    optionIndexes.length === 0 ||
+    !optionIndexes.every((o) => Number.isInteger(o) && o >= 0)
+  ) {
+    return json({ ok: false, error: 'optionIndexes required' }, 400)
+  }
+
+  const { targets } = await loadSessions()
+  const target = targets.get(id)
+  if (!target) return json({ ok: false, error: 'session not active' }, 409)
+
+  // re-detect the picker at answer time — guards against injecting digits when
+  // no picker is up (which would corrupt the prompt) and drives multiSelect vs
+  // single-select from the live state.
+  const question = parsePicker(await capturePane(target))
+  if (!question) return json({ ok: false, error: 'no pending question' }, 409)
+  const keys = answerKeys(question, optionIndexes as number[])
+  if (!keys) return json({ ok: false, error: 'invalid option selection' }, 400)
+  try {
+    await sendKeys(target, keys)
+    return json({ ok: true })
+  } catch (err) {
+    return json({ ok: false, error: String((err as Error).message ?? err) }, 500)
+  }
+}
+
 async function serveStatic(pathname: string): Promise<Response> {
   if (!existsSync(DIST)) {
     return new Response('porthole — run `bun run build` to create ./dist', {
@@ -454,7 +586,7 @@ async function route(req: Request): Promise<Response> {
   if (pathname === '/api/launch' && req.method === 'POST') return handleLaunch(req)
   if (pathname === '/api/nudge' && req.method === 'POST') return handleNudge(req)
 
-  const m = pathname.match(/^\/api\/sessions\/([^/]+)\/(stream|send|resume|close)$/)
+  const m = pathname.match(/^\/api\/sessions\/([^/]+)\/(stream|send|resume|close|answer|question)$/)
   if (m) {
     const id = decodeURIComponent(m[1])
     const action = m[2]
@@ -462,6 +594,8 @@ async function route(req: Request): Promise<Response> {
     if (action === 'send' && req.method === 'POST') return handleSend(id, req)
     if (action === 'resume' && req.method === 'POST') return handleResume(id)
     if (action === 'close' && req.method === 'POST') return handleClose(id)
+    if (action === 'answer' && req.method === 'POST') return handleAnswer(id, req)
+    if (action === 'question' && req.method === 'GET') return handleQuestion(id)
     return json({ error: 'method not allowed' }, 405)
   }
 

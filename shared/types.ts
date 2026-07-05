@@ -100,3 +100,38 @@ export interface NudgeRequest {
   target: string
   key: NudgeKey
 }
+
+// --- AskUserQuestion answering ---
+//
+// a pending AskUserQuestion is NOT observable in the jsonl: claude buffers the
+// assistant message and flushes tool_use + tool_result together only once the
+// tool resolves. so a live question is detected by parsing the tmux pane, and
+// only the model's options are exposed (the picker's auto "Type something" /
+// "Chat about this" entries are never offered in-app).
+export interface QuestionOption {
+  label: string
+  description?: string
+}
+
+export interface AskQuestion {
+  question: string
+  header?: string
+  multiSelect?: boolean
+  options: QuestionOption[]
+}
+
+// GET /api/sessions/:id/question — the currently-displayed picker, or null
+export interface PendingQuestionResponse {
+  question: AskQuestion | null
+}
+
+// POST /api/sessions/:id/answer — chosen model-option indexes for the live
+// picker: exactly one for single-select, one-or-more for multiSelect.
+export interface AnswerRequest {
+  optionIndexes: number[]
+}
+
+export interface AnswerResponse {
+  ok: boolean
+  error?: string
+}

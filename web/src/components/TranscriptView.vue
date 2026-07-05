@@ -1,11 +1,35 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import type { TranscriptEvent } from '../../../shared/types'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import type { AskQuestion, PendingQuestionResponse, TranscriptEvent } from '../../../shared/types'
 import { useAutoScroll } from '../composables/useAutoScroll'
+import { useRoute } from '../composables/useRoute'
 import { groupEvents } from '../utils/transcript'
 import EventBlock from './EventBlock.vue'
+import QuestionCard from './QuestionCard.vue'
 
 const props = defineProps<{ events: TranscriptEvent[] }>()
+
+// a live AskUserQuestion picker is never in the jsonl (claude buffers it), so we
+// poll the pane for it here — the parent SessionView chain is owned elsewhere.
+// sessionId comes from the route rather than a prop for the same reason.
+const QUESTION_POLL_MS = 2500
+const { route } = useRoute()
+const sessionId = computed(() => (route.value.name === 'session' ? route.value.id : ''))
+const pendingQuestion = ref<AskQuestion | null>(null)
+let questionTimer: ReturnType<typeof setInterval> | undefined
+
+async function pollQuestion() {
+  const id = sessionId.value
+  if (!id) return
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}/question`)
+    if (!res.ok) return
+    const data = (await res.json()) as PendingQuestionResponse
+    pendingQuestion.value = data.question
+  } catch {
+    // transient — keep the last state, next tick retries
+  }
+}
 
 const scroller = ref<HTMLElement | null>(null)
 const { hasNewBelow, checkNearBottom, scrollToBottom, onContentGrew } = useAutoScroll(scroller)
@@ -60,8 +84,19 @@ async function showEarlier() {
   requestAnimationFrame(() => (suppressEnter.value = false))
 }
 
+// a freshly-appeared question card grows the content — follow it if pinned
+watch(pendingQuestion, (q, prev) => {
+  if (q && !prev) onContentGrew()
+})
+
 onMounted(() => {
   scrollToBottom(false)
+  pollQuestion()
+  questionTimer = setInterval(pollQuestion, QUESTION_POLL_MS)
+})
+
+onUnmounted(() => {
+  if (questionTimer) clearInterval(questionTimer)
 })
 </script>
 
@@ -77,6 +112,13 @@ onMounted(() => {
           <EventBlock v-for="it in visibleItems" :key="it.key" :item="it" />
         </TransitionGroup>
       </template>
+      <QuestionCard
+        v-if="pendingQuestion && sessionId"
+        :key="`${pendingQuestion.header ?? ''}|${pendingQuestion.question}`"
+        class="transcript-question"
+        :session-id="sessionId"
+        :question="pendingQuestion"
+      />
     </div>
 
     <Transition name="pill">
@@ -111,6 +153,10 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.transcript-question {
+  margin-top: var(--space-4);
 }
 
 /* pinned at the top of the scroller — reveals windowed-out history */

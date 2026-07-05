@@ -1,12 +1,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { DisplayItem } from '../utils/transcript'
+import type { AskQuestion } from '../../../shared/types'
 import { renderMarkdown } from '../utils/markdown'
 import { prettyJson, toolHint } from '../utils/format'
 
 const props = defineProps<{ item: DisplayItem }>()
 
 const expanded = ref(false)
+
+// a pending AskUserQuestion never reaches the jsonl (claude buffers it), so any
+// AskUserQuestion tool_pair here is already answered — render it read-only.
+const isQuestion = computed(
+  () => props.item.kind === 'tool_pair' && props.item.use?.name === 'AskUserQuestion',
+)
+const questionText = computed(() => {
+  if (props.item.kind !== 'tool_pair') return ''
+  const input = props.item.use?.input as { questions?: AskQuestion[] } | undefined
+  const qs = input?.questions
+  return Array.isArray(qs) ? qs.map((q) => q.question).join(' · ') : ''
+})
+// pull the chosen answer(s) out of the result sentence (`…answered: "Q"="Red"…`)
+const answerSummary = computed(() => {
+  const text = props.item.kind === 'tool_pair' ? (props.item.result?.text ?? '') : ''
+  const matches = [...text.matchAll(/="([^"]*)"/g)].map((m) => m[1])
+  return matches.length ? matches.join('; ') : text
+})
 
 // mcp tool names are huge (mcp__server__tool) — show the last segment, keep full name in title
 const toolName = computed(() => {
@@ -44,6 +63,14 @@ function toggle() {
       <div class="ev-collapse-inner">
         <p class="ev-thinking-text">{{ item.event.text }}</p>
       </div>
+    </div>
+  </div>
+
+  <div v-else-if="isQuestion" class="ev ev-question">
+    <span class="ev-q-chip">answered</span>
+    <div class="ev-q-body">
+      <p v-if="questionText" class="ev-q-text">{{ questionText }}</p>
+      <p class="ev-q-answer mono">{{ answerSummary }}</p>
     </div>
   </div>
 
@@ -236,6 +263,50 @@ function toggle() {
   line-height: 1.6;
   padding: var(--space-1) 0 var(--space-3) 1.4em;
   white-space: pre-wrap;
+}
+
+/* answered AskUserQuestion */
+.ev-question {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent-line);
+  border-radius: var(--radius-md);
+  background: var(--glass);
+  padding: var(--space-3);
+}
+
+.ev-q-chip {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-3);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+}
+
+.ev-q-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ev-q-text {
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.ev-q-answer {
+  font-size: var(--text-sm);
+  color: var(--accent-strong);
+  margin: 0;
+  word-break: break-word;
 }
 
 /* tool pair */
