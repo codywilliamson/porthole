@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useSessions } from '../composables/useSessions'
+import { useSessions, listAnimated } from '../composables/useSessions'
 import { goToSession } from '../composables/useRoute'
 import { relativeTime, truncateMiddle } from '../utils/format'
 
@@ -16,6 +16,16 @@ const recentSessions = computed(() =>
 const STAGGER_MS = 45
 const STAGGER_CAP = 12
 const enterDelay = (i: number) => Math.min(i, STAGGER_CAP) * STAGGER_MS
+
+// entrance stagger runs once ever — back-navigation renders rows instantly
+// with no re-stagger. after the first paint, flip the module flag.
+const animate = !listAnimated.value
+if (animate) requestAnimationFrame(() => (listAnimated.value = true))
+const rowInitial = (i: number) => (animate ? { opacity: 0, y: 14 } : { opacity: 1, y: 0 })
+const rowEnter = (i: number) =>
+  animate
+    ? { opacity: 1, y: 0, transition: { duration: 320, delay: enterDelay(i) } }
+    : { opacity: 1, y: 0, transition: { duration: 0 } }
 </script>
 
 <template>
@@ -58,8 +68,8 @@ const enterDelay = (i: number) => Math.min(i, STAGGER_CAP) * STAGGER_MS
               v-for="(s, i) in activeSessions"
               :key="s.id"
               v-motion
-              :initial="{ opacity: 0, y: 14 }"
-              :enter="{ opacity: 1, y: 0, transition: { duration: 320, delay: enterDelay(i) } }"
+              :initial="rowInitial(i)"
+              :enter="rowEnter(i)"
               class="sl-row"
               type="button"
               @click="goToSession(s.id)"
@@ -87,8 +97,8 @@ const enterDelay = (i: number) => Math.min(i, STAGGER_CAP) * STAGGER_MS
               v-for="(s, i) in recentSessions"
               :key="s.id"
               v-motion
-              :initial="{ opacity: 0, y: 14 }"
-              :enter="{ opacity: 1, y: 0, transition: { duration: 320, delay: enterDelay(activeSessions.length + i) } }"
+              :initial="rowInitial(activeSessions.length + i)"
+              :enter="rowEnter(activeSessions.length + i)"
               class="sl-row"
               type="button"
               @click="goToSession(s.id)"

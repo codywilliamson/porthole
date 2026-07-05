@@ -42,14 +42,18 @@ const { route } = useRoute()
   inset: 0;
 }
 
-/* route transitions: list <-> session slide + fade */
+/* route transitions: list <-> session slide + fade. transform/opacity only
+   (compositor-friendly, no layout on the big transcript DOM). out-in keeps the
+   heavy view from mounting until the old one has left; kept short so the mount
+   lands fast. */
 .push-enter-active,
 .push-leave-active,
 .pop-enter-active,
 .pop-leave-active {
   transition:
-    transform 0.32s var(--ease-out),
-    opacity 0.24s ease;
+    transform 0.18s var(--ease-out),
+    opacity 0.18s ease;
+  will-change: transform, opacity;
 }
 
 .push-enter-from {
