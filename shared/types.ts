@@ -66,3 +66,37 @@ export interface ResumeResponse {
   ok: boolean
   error?: string
 }
+
+// --- launcher ---
+
+export interface KnownProject {
+  path: string
+  lastUsed: number // epoch ms, most-recently-used first
+}
+
+export interface ProjectsResponse {
+  root: string // config.rootDir
+  known: KnownProject[]
+}
+
+export interface DirsResponse {
+  path: string // resolved absolute path of the browsed dir
+  dirs: string[] // immediate subdir names, sorted
+}
+
+export interface LaunchRequest {
+  dir: string // absolute path, must be launchable
+}
+
+export interface LaunchResponse {
+  ok: boolean
+  target?: string // new pane target when ok
+  error?: string
+}
+
+export type NudgeKey = 'enter' | 'escape'
+
+export interface NudgeRequest {
+  target: string
+  key: NudgeKey
+}

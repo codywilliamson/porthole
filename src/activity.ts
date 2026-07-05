@@ -113,6 +113,21 @@ function fdSessionMatch(pid: number, byId: Map<string, DiscoveredSession>): stri
   return null
 }
 
+// does a live pane (by target) have a claude process in its tree?
+// works before the session's jsonl exists — used to nudge the folder-trust prompt.
+export async function paneHasClaude(target: string): Promise<boolean> {
+  const pane = (await listPanes()).find((p) => p.target === target)
+  if (!pane) return false
+  const table = readProcTable()
+  const children = new Map<number, number[]>()
+  for (const info of table.values()) {
+    const list = children.get(info.ppid)
+    if (list) list.push(info.pid)
+    else children.set(info.ppid, [info.pid])
+  }
+  return findClaudeDescendant(pane.pid, children, table) !== null
+}
+
 // map of sessionId -> tmux target for sessions a live claude process is writing
 export async function getActiveTargets(
   sessions: DiscoveredSession[],

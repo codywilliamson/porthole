@@ -2,15 +2,20 @@ import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { config } from './config'
-import { discoverSessions, parseTranscriptFile, parseLine, type DiscoveredSession } from './transcript'
-import { getActiveTargets } from './activity'
-import { sendToPane, resumeSession } from './tmux'
-import type { SessionSummary, TranscriptEvent } from '../shared/types'
+import { discoverSessions, parseLine, type DiscoveredSession } from './transcript'
+import { getActiveTargets, paneHasClaude } from './activity'
+import { sendToPane, resumeSession, launchClaude, killWindow, sendKey, type TmuxKey } from './tmux'
+import { knownProjects, listDirs, isLaunchableDir } from './projects'
+import type { SessionSummary, TranscriptEvent, NudgeKey } from '../shared/types'
 
 // tuning knobs
 const HEARTBEAT_MS = 15_000
 const STATUS_MS = 5_000
 const CHECK_DEBOUNCE_MS = 100
+// coalesce the many near-simultaneous discover+active calls (list poll + per-stream ticks)
+const LOAD_TTL_MS = 1_000
+// parsed-transcript LRU: warm re-opens skip the multi-MB re-parse
+const TX_CACHE_MAX = 8
 
 const DIST = resolve(import.meta.dir, '../dist')
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -29,11 +34,102 @@ function sseFrame(event: string, data: unknown): Uint8Array {
   return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
 }
 
-// discover + active targets in one shot — the two feed every route
-async function loadSessions(): Promise<{ sessions: DiscoveredSession[]; targets: Map<string, string> }> {
-  const sessions = await discoverSessions(config.projectsDir)
-  const targets = await getActiveTargets(sessions)
-  return { sessions, targets }
+// discover + active targets in one shot — the two feed every route.
+// memoized for ~1s: a single in-flight promise is shared by concurrent callers
+// (list poll + every stream's status tick) to avoid stampeding /proc + fs.
+type LoadResult = { sessions: DiscoveredSession[]; targets: Map<string, string> }
+let loadCache: { at: number; promise: Promise<LoadResult> } | null = null
+
+function loadSessions(): Promise<LoadResult> {
+  const now = Date.now()
+  if (loadCache && now - loadCache.at < LOAD_TTL_MS) return loadCache.promise
+  const promise = (async () => {
+    const sessions = await discoverSessions(config.projectsDir)
+    const targets = await getActiveTargets(sessions)
+    return { sessions, targets }
+  })()
+  loadCache = { at: now, promise }
+  // don't cache a rejection — let the next caller retry
+  promise.catch(() => {
+    if (loadCache?.promise === promise) loadCache = null
+  })
+  return promise
+}
+
+// --- parsed-transcript LRU cache ---
+
+interface TxCacheEntry {
+  size: number
+  mtimeMs: number
+  events: TranscriptEvent[]
+  offset: number // byte position of the first not-yet-complete line
+}
+
+// map insertion order = access order; re-set on touch, evict from the front
+const txCache = new Map<string, TxCacheEntry>()
+
+function touchTxCache(filePath: string, entry: TxCacheEntry): void {
+  txCache.delete(filePath)
+  txCache.set(filePath, entry)
+  while (txCache.size > TX_CACHE_MAX) {
+    const oldest = txCache.keys().next().value
+    if (oldest === undefined) break
+    txCache.delete(oldest)
+  }
+}
+
+// parse complete (newline-terminated) lines from text into out;
+// returns bytes consumed up to the last newline (incomplete tail left unparsed)
+function parseComplete(text: string, out: TranscriptEvent[]): number {
+  const lines = text.split('\n')
+  const remainder = lines.pop() ?? ''
+  for (const line of lines) if (line.trim()) out.push(...parseLine(line))
+  return Buffer.byteLength(text, 'utf8') - Buffer.byteLength(remainder, 'utf8')
+}
+
+// warm-cached read: unchanged file → instant; grown → parse appended bytes only;
+// shrunk/new → full parse. self-heals a stale entry via the grown path.
+async function readTranscriptCached(filePath: string): Promise<TxCacheEntry> {
+  const st = await stat(filePath)
+  const cached = txCache.get(filePath)
+  if (cached && cached.size === st.size && cached.mtimeMs === st.mtimeMs) {
+    touchTxCache(filePath, cached)
+    return cached
+  }
+  let events: TranscriptEvent[]
+  let offset: number
+  if (cached && st.size > cached.size) {
+    const chunk = await Bun.file(filePath).slice(cached.offset, st.size).text()
+    events = cached.events.slice()
+    offset = cached.offset + parseComplete(chunk, events)
+  } else {
+    const raw = await Bun.file(filePath).text()
+    events = []
+    offset = parseComplete(raw, events)
+  }
+  const entry: TxCacheEntry = { size: st.size, mtimeMs: st.mtimeMs, events, offset }
+  touchTxCache(filePath, entry)
+  return entry
+}
+
+// extend a coherent cache entry with tail-parsed events so re-opens stay warm.
+// no-op if the entry was evicted or diverged — readTranscriptCached self-heals.
+function appendTxCache(
+  filePath: string,
+  startOffset: number,
+  newEvents: TranscriptEvent[],
+  offset: number,
+  size: number,
+  mtimeMs: number,
+): void {
+  const cached = txCache.get(filePath)
+  if (!cached || cached.offset !== startOffset) return
+  touchTxCache(filePath, {
+    size,
+    mtimeMs,
+    offset,
+    events: newEvents.length ? cached.events.concat(newEvents) : cached.events,
+  })
 }
 
 // merge active/tmuxTarget and strip internal fields
@@ -52,8 +148,8 @@ function safeJoin(base: string, pathname: string): string | null {
 
 function streamSession(session: DiscoveredSession, summary: SessionSummary, signal: AbortSignal): Response {
   const filePath = session.filePath
+  // offset = byte position of the first not-yet-complete line (line boundary)
   let offset = 0
-  let remainder = ''
   let closed = false
 
   let watcher: FSWatcher | null = null
@@ -84,15 +180,13 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
         }
       }
 
-      // read appended bytes and emit any complete lines
-      const scanGrowth = async (size: number) => {
-        const chunk = await Bun.file(filePath).slice(offset, size).text()
-        offset = size
-        remainder += chunk
-        const lines = remainder.split('\n')
-        remainder = lines.pop() ?? ''
+      // read appended bytes, emit complete lines, keep the cache warm
+      const scanGrowth = async (size: number, mtimeMs: number) => {
+        const startOffset = offset
+        const chunk = await Bun.file(filePath).slice(startOffset, size).text()
         const events: TranscriptEvent[] = []
-        for (const line of lines) if (line.trim()) events.push(...parseLine(line))
+        offset = startOffset + parseComplete(chunk, events)
+        appendTxCache(filePath, startOffset, events, offset, size, mtimeMs)
         if (events.length) send('events', events)
       }
 
@@ -107,12 +201,11 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
         }
         if (st.size < offset) {
           // file replaced/truncated — full re-parse
-          const events = await parseTranscriptFile(filePath)
-          offset = st.size
-          remainder = ''
-          send('reset', { session: summary, events })
+          const entry = await readTranscriptCached(filePath)
+          offset = entry.offset
+          send('reset', { session: summary, events: entry.events })
         } else if (st.size > offset) {
-          await scanGrowth(st.size)
+          await scanGrowth(st.size, st.mtimeMs)
         }
       }
       const scheduleCheck = () => {
@@ -137,9 +230,9 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
       }
 
       try {
-        const events = await parseTranscriptFile(filePath)
-        offset = (await stat(filePath)).size
-        send('init', { session: summary, events })
+        const entry = await readTranscriptCached(filePath)
+        offset = entry.offset
+        send('init', { session: summary, events: entry.events })
       } catch (err) {
         console.error('stream init failed', err)
         cleanup()
@@ -237,6 +330,74 @@ async function handleResume(id: string): Promise<Response> {
   return json({ ok: true })
 }
 
+// --- launcher routes ---
+
+async function handleProjects(): Promise<Response> {
+  const { sessions } = await loadSessions()
+  return json({ root: config.rootDir, known: knownProjects(sessions) })
+}
+
+async function handleDirs(rel: string): Promise<Response> {
+  const result = await listDirs(rel)
+  if (!result) return json({ error: 'invalid or missing directory' }, 400)
+  return json(result)
+}
+
+async function handleLaunch(req: Request): Promise<Response> {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    body = null
+  }
+  const dir = (body as { dir?: unknown } | null)?.dir
+  if (typeof dir !== 'string' || !dir) return json({ ok: false, error: 'dir required' }, 400)
+  const { sessions } = await loadSessions()
+  if (!isLaunchableDir(dir, sessions)) return json({ ok: false, error: 'dir not launchable' }, 403)
+  try {
+    const target = await launchClaude(dir)
+    return json({ ok: true, target })
+  } catch (err) {
+    return json({ ok: false, error: String((err as Error).message ?? err) }, 500)
+  }
+}
+
+const NUDGE_KEYS: Record<NudgeKey, TmuxKey> = { enter: 'Enter', escape: 'Escape' }
+
+async function handleNudge(req: Request): Promise<Response> {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    body = null
+  }
+  const { target, key } = (body as { target?: unknown; key?: unknown } | null) ?? {}
+  if (typeof target !== 'string' || !target) return json({ ok: false, error: 'target required' }, 400)
+  const tmuxKey = typeof key === 'string' ? NUDGE_KEYS[key as NudgeKey] : undefined
+  if (!tmuxKey) return json({ ok: false, error: 'key must be enter or escape' }, 400)
+  // only nudge a live pane running claude (works before the jsonl exists)
+  if (!(await paneHasClaude(target))) return json({ ok: false, error: 'no claude pane at target' }, 404)
+  try {
+    await sendKey(target, tmuxKey)
+    return json({ ok: true })
+  } catch (err) {
+    return json({ ok: false, error: String((err as Error).message ?? err) }, 500)
+  }
+}
+
+async function handleClose(id: string): Promise<Response> {
+  if (!UUID_RE.test(id)) return json({ ok: false, error: 'invalid session id' }, 400)
+  const { targets } = await loadSessions()
+  const target = targets.get(id)
+  if (!target) return json({ ok: false, error: 'session not active' }, 409)
+  try {
+    await killWindow(target)
+    return json({ ok: true })
+  } catch (err) {
+    return json({ ok: false, error: String((err as Error).message ?? err) }, 500)
+  }
+}
+
 async function serveStatic(pathname: string): Promise<Response> {
   if (!existsSync(DIST)) {
     return new Response('porthole — run `bun run build` to create ./dist', {
@@ -288,14 +449,19 @@ async function route(req: Request): Promise<Response> {
   if (blocked) return blocked
 
   if (pathname === '/api/sessions' && req.method === 'GET') return handleSessions()
+  if (pathname === '/api/projects' && req.method === 'GET') return handleProjects()
+  if (pathname === '/api/dirs' && req.method === 'GET') return handleDirs(url.searchParams.get('path') ?? '')
+  if (pathname === '/api/launch' && req.method === 'POST') return handleLaunch(req)
+  if (pathname === '/api/nudge' && req.method === 'POST') return handleNudge(req)
 
-  const m = pathname.match(/^\/api\/sessions\/([^/]+)\/(stream|send|resume)$/)
+  const m = pathname.match(/^\/api\/sessions\/([^/]+)\/(stream|send|resume|close)$/)
   if (m) {
     const id = decodeURIComponent(m[1])
     const action = m[2]
     if (action === 'stream' && req.method === 'GET') return handleStream(id, req)
     if (action === 'send' && req.method === 'POST') return handleSend(id, req)
     if (action === 'resume' && req.method === 'POST') return handleResume(id)
+    if (action === 'close' && req.method === 'POST') return handleClose(id)
     return json({ error: 'method not allowed' }, 405)
   }
 
