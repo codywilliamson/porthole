@@ -1,7 +1,8 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 
-// manual hash routing — no vue-router. '#/' = session list, '#/session/<id>' = transcript
-export type Route = { name: 'list' } | { name: 'session'; id: string }
+// manual hash routing — no vue-router.
+// '#/' = session list, '#/session/<id>' = transcript, '#/tmux' = pane overview
+export type Route = { name: 'list' } | { name: 'session'; id: string } | { name: 'tmux' }
 
 function parseHash(): Route {
   const hash = window.location.hash.replace(/^#\/?/, '')
@@ -9,6 +10,7 @@ function parseHash(): Route {
     const id = decodeURIComponent(hash.slice('session/'.length))
     if (id) return { name: 'session', id }
   }
+  if (hash === 'tmux') return { name: 'tmux' }
   return { name: 'list' }
 }
 
@@ -37,4 +39,8 @@ export function goToList() {
 
 export function goToSession(id: string) {
   window.location.hash = `#/session/${encodeURIComponent(id)}`
+}
+
+export function goToTmux() {
+  window.location.hash = '#/tmux'
 }

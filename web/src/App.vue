@@ -2,6 +2,7 @@
 import ShaderBackground from './components/ShaderBackground.vue'
 import SessionList from './components/SessionList.vue'
 import SessionView from './components/SessionView.vue'
+import TmuxView from './components/TmuxView.vue'
 import { useRoute } from './composables/useRoute'
 
 const { route } = useRoute()
@@ -12,9 +13,10 @@ const { route } = useRoute()
   <div class="app-scrim" aria-hidden="true"></div>
 
   <main class="app-viewport">
-    <Transition :name="route.name === 'session' ? 'push' : 'pop'" mode="out-in">
+    <Transition :name="route.name === 'list' ? 'pop' : 'push'" mode="out-in">
       <SessionList v-if="route.name === 'list'" key="list" />
       <SessionView v-else-if="route.name === 'session'" :key="route.id" :session-id="route.id" />
+      <TmuxView v-else-if="route.name === 'tmux'" key="tmux" />
     </Transition>
   </main>
 </template>

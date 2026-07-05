@@ -229,9 +229,9 @@ async function closeWindow() {
   width: 44px;
   height: 44px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  background: var(--glass);
-  color: var(--ink-2);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--ink-1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -253,14 +253,13 @@ async function closeWindow() {
   top: calc(100% + var(--space-2));
   right: 0;
   z-index: 21;
-  min-width: 168px;
+  min-width: 180px;
   padding: var(--space-1);
   border-radius: var(--radius-md);
   border: 1px solid var(--line-strong);
-  background: var(--glass-strong);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* solid surface — translucent glass over the animated shader was unreadable */
+  background: var(--bg-2);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.66);
   animation: sv-menu-in 0.16s var(--ease-out);
 }
 

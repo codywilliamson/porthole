@@ -128,6 +128,23 @@ export async function paneHasClaude(target: string): Promise<boolean> {
   return findClaudeDescendant(pane.pid, children, table) !== null
 }
 
+// which of the given panes have a claude process in their tree.
+// builds the proc table once, unlike calling paneHasClaude per pane.
+export function panesWithClaude(panes: Pane[]): Set<string> {
+  const table = readProcTable()
+  const children = new Map<number, number[]>()
+  for (const info of table.values()) {
+    const list = children.get(info.ppid)
+    if (list) list.push(info.pid)
+    else children.set(info.ppid, [info.pid])
+  }
+  const out = new Set<string>()
+  for (const pane of panes) {
+    if (findClaudeDescendant(pane.pid, children, table) !== null) out.add(pane.target)
+  }
+  return out
+}
+
 // map of sessionId -> tmux target for sessions a live claude process is writing
 export async function getActiveTargets(
   sessions: DiscoveredSession[],

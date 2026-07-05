@@ -101,6 +101,21 @@ export interface NudgeRequest {
   key: NudgeKey
 }
 
+// --- tmux pane overview ---
+
+export interface PaneInfo {
+  target: string // session:window.pane
+  cwd: string
+  command: string // pane_current_command (node/claude/zsh/...)
+  hasClaude: boolean // a claude process lives in this pane's tree
+  sessionId: string | null // mapped porthole session, when one is active here
+  title: string | null // that session's title
+}
+
+export interface PanesResponse {
+  panes: PaneInfo[]
+}
+
 // --- AskUserQuestion answering ---
 //
 // a pending AskUserQuestion is NOT observable in the jsonl: claude buffers the

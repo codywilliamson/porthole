@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useSessions, listAnimated } from '../composables/useSessions'
-import { goToSession } from '../composables/useRoute'
+import { goToSession, goToTmux } from '../composables/useRoute'
 import { relativeTime, truncateMiddle } from '../utils/format'
 import LauncherSheet from './LauncherSheet.vue'
 
@@ -38,22 +38,30 @@ const rowEnter = (i: number) =>
         <h1 class="sl-title">porthole</h1>
         <p class="sl-subtitle">{{ sessions.length }} session{{ sessions.length === 1 ? '' : 's' }} · claude code</p>
       </div>
-      <button
-        class="sl-refresh"
-        :class="{ 'is-loading': loading }"
-        type="button"
-        aria-label="refresh sessions"
-        @click="refresh"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path
-            d="M4 12a8 8 0 0 1 14.5-4.6M20 12a8 8 0 0 1-14.5 4.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path d="M18 3v5h-5M6 21v-5h5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </button>
+      <div class="sl-header-actions">
+        <button class="sl-icon-btn" type="button" aria-label="tmux panes" @click="goToTmux()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M12 4v16M3 12h9" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button
+          class="sl-icon-btn"
+          :class="{ 'is-loading': loading }"
+          type="button"
+          aria-label="refresh sessions"
+          @click="refresh"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path
+              d="M4 12a8 8 0 0 1 14.5-4.6M20 12a8 8 0 0 1-14.5 4.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path d="M18 3v5h-5M6 21v-5h5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <div class="sl-body">
@@ -166,7 +174,13 @@ const rowEnter = (i: number) =>
   letter-spacing: 0.08em;
 }
 
-.sl-refresh {
+.sl-header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sl-icon-btn {
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
@@ -181,12 +195,12 @@ const rowEnter = (i: number) =>
   color: var(--ink-2);
 }
 
-.sl-refresh svg {
+.sl-icon-btn svg {
   width: 18px;
   height: 18px;
 }
 
-.sl-refresh.is-loading svg {
+.sl-icon-btn.is-loading svg {
   animation: spin 0.9s linear infinite;
 }
 

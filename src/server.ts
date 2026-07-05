@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { config } from './config'
 import { discoverSessions, parseLine, type DiscoveredSession } from './transcript'
-import { getActiveTargets, paneHasClaude } from './activity'
+import { getActiveTargets, paneHasClaude, panesWithClaude } from './activity'
 import {
   sendToPane,
   resumeSession,
@@ -12,6 +12,7 @@ import {
   sendKey,
   sendKeys,
   capturePane,
+  listPanes,
   type TmuxKey,
 } from './tmux'
 import { knownProjects, listDirs, isLaunchableDir } from './projects'
@@ -302,6 +303,27 @@ async function handleStream(id: string, req: Request): Promise<Response> {
   return streamSession(session, toSummary(session, targets), req.signal)
 }
 
+// full tmux pane overview — every pane, mapped to its porthole session when active
+async function handlePanes(): Promise<Response> {
+  const [{ sessions, targets }, panes] = await Promise.all([loadSessions(), listPanes()])
+  const claude = panesWithClaude(panes)
+  const sessionByTarget = new Map<string, string>()
+  for (const [sid, t] of targets) sessionByTarget.set(t, sid)
+  const titleById = new Map(sessions.map((s) => [s.id, s.title]))
+  const out = panes.map((p) => {
+    const sessionId = sessionByTarget.get(p.target) ?? null
+    return {
+      target: p.target,
+      cwd: p.cwd,
+      command: p.command,
+      hasClaude: claude.has(p.target),
+      sessionId,
+      title: sessionId ? (titleById.get(sessionId) ?? null) : null,
+    }
+  })
+  return json({ panes: out })
+}
+
 async function handleSend(id: string, req: Request): Promise<Response> {
   if (!UUID_RE.test(id)) return json({ ok: false, error: 'invalid session id' }, 400)
   let body: unknown
@@ -581,6 +603,7 @@ async function route(req: Request): Promise<Response> {
   if (blocked) return blocked
 
   if (pathname === '/api/sessions' && req.method === 'GET') return handleSessions()
+  if (pathname === '/api/panes' && req.method === 'GET') return handlePanes()
   if (pathname === '/api/projects' && req.method === 'GET') return handleProjects()
   if (pathname === '/api/dirs' && req.method === 'GET') return handleDirs(url.searchParams.get('path') ?? '')
   if (pathname === '/api/launch' && req.method === 'POST') return handleLaunch(req)
