@@ -36,7 +36,8 @@ const rowEnter = (i: number) =>
     <header class="sl-header">
       <div>
         <h1 class="sl-title no-select">porthole</h1>
-        <p class="sl-subtitle no-select">{{ sessions.length }} session{{ sessions.length === 1 ? '' : 's' }} · claude code</p>
+        <p v-if="loading && sessions.length === 0" class="sl-subtitle no-select">scanning · claude code</p>
+        <p v-else class="sl-subtitle no-select">{{ sessions.length }} session{{ sessions.length === 1 ? '' : 's' }} · claude code</p>
       </div>
       <div class="sl-header-actions">
         <button class="sl-icon-btn" type="button" aria-label="tmux panes" @click="goToTmux()">
