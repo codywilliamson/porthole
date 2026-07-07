@@ -16,6 +16,11 @@ over Tailscale.
   redefine the shapes on either side (backend or `web/`).
 - `web/` — Vue 3 SPA, mobile-first, built by Vite into `dist/`, served by the backend.
 
+## design system
+
+`DESIGN.md` — porthole visual language (tokens, motion, touch, iconography rules).
+Read it before any UI work. Tokens live in `web/src/style.css`; don't invent values.
+
 ## commands
 
 ```sh
