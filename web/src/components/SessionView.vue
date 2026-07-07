@@ -144,13 +144,12 @@ async function closeWindow() {
 
     <p v-if="actionError" class="sv-stream-banner sv-action-error">{{ actionError }}</p>
 
-    <p v-if="status === 'connecting' && events.length === 0" class="sv-stream-banner">connecting…</p>
-    <p v-else-if="status === 'reconnecting'" class="sv-stream-banner sv-stream-banner-warn">
+    <p v-if="status === 'reconnecting'" class="sv-stream-banner sv-stream-banner-warn">
       reconnecting — feed dropped, retrying…
     </p>
 
     <div class="sv-body">
-      <TranscriptView :events="events" />
+      <TranscriptView :events="events" :status="status" />
     </div>
 
     <DraftPad :session-id="sessionId" :active="active" />

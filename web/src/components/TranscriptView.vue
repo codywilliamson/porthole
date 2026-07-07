@@ -3,11 +3,12 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { AskQuestion, PendingQuestionResponse, TranscriptEvent } from '../../../shared/types'
 import { useAutoScroll } from '../composables/useAutoScroll'
 import { useRoute } from '../composables/useRoute'
+import type { StreamStatus } from '../composables/useSessionStream'
 import { groupEvents } from '../utils/transcript'
 import EventBlock from './EventBlock.vue'
 import QuestionCard from './QuestionCard.vue'
 
-const props = defineProps<{ events: TranscriptEvent[] }>()
+const props = defineProps<{ events: TranscriptEvent[]; status: StreamStatus }>()
 
 // a live AskUserQuestion picker is never in the jsonl (claude buffers it), so we
 // poll the pane for it here — the parent SessionView chain is owned elsewhere.
@@ -103,7 +104,14 @@ onUnmounted(() => {
 <template>
   <div class="transcript-view">
     <div ref="scroller" class="transcript-scroller" @scroll="checkNearBottom">
-      <p v-if="items.length === 0" class="transcript-empty">no transcript yet — waiting for events…</p>
+      <div v-if="status === 'connecting' && items.length === 0" class="transcript-skel" aria-hidden="true">
+        <div class="skel ts-skel-bubble"></div>
+        <div class="skel ts-skel-text ts-skel-text-lg"></div>
+        <div class="skel ts-skel-tool"></div>
+        <div class="skel ts-skel-text ts-skel-text-sm"></div>
+        <span class="visually-hidden" role="status">connecting…</span>
+      </div>
+      <p v-else-if="items.length === 0" class="transcript-empty">no transcript yet — waiting for events…</p>
       <template v-else>
         <button v-if="hiddenCount > 0" class="show-earlier mono" type="button" @click="showEarlier">
           show earlier ({{ hiddenCount }})
@@ -184,6 +192,39 @@ onUnmounted(() => {
 /* bulk prepend from "show earlier" should appear instantly, not mass-fade */
 .no-enter-anim :deep(.ev-enter-active) {
   transition: none;
+}
+
+.transcript-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ts-skel-bubble {
+  align-self: flex-end;
+  width: 55%;
+  height: 44px;
+  border-radius: var(--radius-md);
+}
+
+.ts-skel-text {
+  width: 85%;
+  border-radius: var(--radius-md);
+}
+
+.ts-skel-text-lg {
+  height: 72px;
+}
+
+.ts-skel-text-sm {
+  width: 65%;
+  height: 56px;
+}
+
+.ts-skel-tool {
+  width: 60%;
+  height: 44px;
+  border-radius: var(--radius-md);
 }
 
 .transcript-empty {

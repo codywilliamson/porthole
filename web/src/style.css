@@ -165,3 +165,38 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* skeleton loading blocks — mimic real row geometry, quiet shimmer between
+   --bg-2 and --line tones. the global reduced-motion rule above already
+   collapses the animation-duration to ~0, so it freezes on a static block
+   with no extra media query needed here. */
+.skel {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--bg-2) 0%, var(--bg-2-hover) 50%, var(--bg-2) 100%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes skel-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skel-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.skel-line {
+  height: 12px;
+  width: 100%;
+}
+
+.skel-line-sm {
+  height: 10px;
+}

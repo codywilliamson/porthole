@@ -100,7 +100,13 @@ onMounted(() => {
           <section class="ls-section">
             <h3 class="ls-label no-select">recent projects</h3>
             <p v-if="projectsError" class="ls-state ls-state-error">{{ projectsError }}</p>
-            <p v-else-if="projectsLoading && projects.length === 0" class="ls-state">loading…</p>
+            <div v-else-if="projectsLoading && projects.length === 0" class="ls-rows" aria-hidden="true">
+              <div v-for="i in 3" :key="i" class="ls-proj ls-proj-skel">
+                <span class="skel skel-line ls-skel-name" :class="{ 'ls-skel-alt': i % 2 === 0 }"></span>
+                <span class="skel skel-line skel-line-sm ls-skel-path" :class="{ 'ls-skel-alt': i % 2 === 0 }"></span>
+              </div>
+              <span class="visually-hidden" role="status">loading…</span>
+            </div>
             <p v-else-if="projects.length === 0" class="ls-state">no known projects yet</p>
             <div v-else class="ls-rows">
               <template v-for="p in projects" :key="p.path">
@@ -147,7 +153,13 @@ onMounted(() => {
             </button>
 
             <p v-if="browseError" class="ls-state ls-state-error">{{ browseError }}</p>
-            <p v-else-if="browseLoading && dirs.length === 0" class="ls-state">loading…</p>
+            <div v-else-if="browseLoading && dirs.length === 0" class="ls-rows" aria-hidden="true">
+              <div v-for="i in 3" :key="i" class="ls-dir ls-dir-skel">
+                <span class="skel ls-skel-icon"></span>
+                <span class="skel skel-line ls-skel-dirname" :class="{ 'ls-skel-alt': i % 2 === 0 }"></span>
+              </div>
+              <span class="visually-hidden" role="status">loading…</span>
+            </div>
             <p v-else-if="dirs.length === 0" class="ls-state">no subdirectories</p>
             <div v-else class="ls-rows">
               <button
@@ -315,6 +327,27 @@ onMounted(() => {
   color: var(--ink-1);
 }
 
+.ls-proj-skel {
+  justify-content: center;
+  cursor: default;
+}
+
+.ls-skel-name {
+  width: 40%;
+}
+
+.ls-skel-path {
+  width: 70%;
+}
+
+.ls-skel-alt.ls-skel-name {
+  width: 55%;
+}
+
+.ls-skel-alt.ls-skel-path {
+  width: 50%;
+}
+
 .ls-proj-path {
   font-size: var(--text-xs);
   color: var(--ink-3);
@@ -464,6 +497,26 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ls-dir-skel {
+  cursor: default;
+}
+
+.ls-skel-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+}
+
+.ls-skel-dirname {
+  flex: 1;
+  width: 45%;
+}
+
+.ls-skel-alt.ls-skel-dirname {
+  width: 60%;
 }
 
 .ls-dir-chev {

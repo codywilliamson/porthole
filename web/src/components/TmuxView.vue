@@ -71,7 +71,15 @@ async function doClose(p: PaneInfo) {
     </header>
 
     <div class="tv-body">
-      <p v-if="loading && panes.length === 0" class="tv-empty">loading panes…</p>
+      <div v-if="loading && panes.length === 0" class="tv-list" aria-hidden="true">
+        <div v-for="i in 3" :key="i" class="tv-row tv-row-skel">
+          <div class="tv-row-main">
+            <span class="skel skel-line skel-line-sm tv-skel-header" :class="{ 'tv-skel-alt': i % 2 === 0 }"></span>
+            <span class="skel skel-line tv-skel-sub" :class="{ 'tv-skel-alt': i % 2 === 0 }"></span>
+          </div>
+        </div>
+        <span class="visually-hidden" role="status">loading panes…</span>
+      </div>
       <p v-else-if="error && panes.length === 0" class="tv-empty tv-empty-err">{{ error }}</p>
       <p v-else-if="panes.length === 0" class="tv-empty">no tmux panes running.</p>
 
@@ -226,6 +234,28 @@ async function doClose(p: PaneInfo) {
 
 .tv-row.is-claude {
   border-color: var(--accent-line);
+}
+
+.tv-row-skel .tv-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tv-skel-header {
+  width: 45%;
+}
+
+.tv-skel-sub {
+  width: 80%;
+}
+
+.tv-skel-alt.tv-skel-header {
+  width: 32%;
+}
+
+.tv-skel-alt.tv-skel-sub {
+  width: 65%;
 }
 
 .tv-row-main {

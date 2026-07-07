@@ -66,7 +66,16 @@ const rowEnter = (i: number) =>
 
     <div class="sl-body">
       <p v-if="error" class="sl-state sl-state-error">reception lost — {{ error }}</p>
-      <p v-else-if="loading && sessions.length === 0" class="sl-state">scanning for sessions…</p>
+      <div v-else-if="loading && sessions.length === 0" class="sl-rows" aria-hidden="true">
+        <div v-for="i in 5" :key="i" class="sl-row sl-row-skel">
+          <span class="skel skel-dot"></span>
+          <span class="sl-row-main">
+            <span class="skel skel-line sl-skel-title" :class="{ 'sl-skel-alt': i % 2 === 0 }"></span>
+            <span class="skel skel-line skel-line-sm sl-skel-meta" :class="{ 'sl-skel-alt': i % 2 === 0 }"></span>
+          </span>
+        </div>
+        <span class="visually-hidden" role="status">scanning for sessions…</span>
+      </div>
       <p v-else-if="sessions.length === 0" class="sl-state">
         no sessions yet.<br />start claude code in a tmux window to see it here.
       </p>
@@ -342,6 +351,26 @@ const rowEnter = (i: number) =>
 
 .sl-dot-sep {
   opacity: 0.6;
+}
+
+.sl-row-skel {
+  cursor: default;
+}
+
+.sl-skel-title {
+  width: 60%;
+}
+
+.sl-skel-meta {
+  width: 35%;
+}
+
+.sl-skel-alt.sl-skel-title {
+  width: 48%;
+}
+
+.sl-skel-alt.sl-skel-meta {
+  width: 28%;
 }
 
 .sl-badge {
