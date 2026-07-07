@@ -395,7 +395,7 @@ async function doClose(p: PaneInfo) {
 .pane-move,
 .pane-enter-active,
 .pane-leave-active {
-  transition: all 0.3s var(--ease-out);
+  transition: all 0.25s var(--ease-out);
 }
 
 .pane-enter-from {

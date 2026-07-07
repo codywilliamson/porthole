@@ -400,7 +400,7 @@ const rowEnter = (i: number) =>
 .row-move,
 .row-enter-active,
 .row-leave-active {
-  transition: all 0.3s var(--ease-out);
+  transition: all 0.25s var(--ease-out);
 }
 
 .row-leave-active {
