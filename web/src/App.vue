@@ -3,6 +3,7 @@ import ShaderBackground from './components/ShaderBackground.vue'
 import SessionList from './components/SessionList.vue'
 import SessionView from './components/SessionView.vue'
 import TmuxView from './components/TmuxView.vue'
+import { updateReady, applyUpdate } from './composables/useAppUpdate'
 import { useRoute } from './composables/useRoute'
 
 const { route } = useRoute()
@@ -19,6 +20,12 @@ const { route } = useRoute()
       <TmuxView v-else-if="route.name === 'tmux'" key="tmux" />
     </Transition>
   </main>
+
+  <Transition name="update-pop">
+    <button v-if="updateReady" class="update-pill mono" type="button" @click="applyUpdate()">
+      update ready — reload
+    </button>
+  </Transition>
 </template>
 
 <style>
@@ -76,12 +83,49 @@ const { route } = useRoute()
   opacity: 0;
 }
 
+/* new-build pill — floats over everything, top center below the notch */
+.update-pill {
+  position: fixed;
+  top: calc(var(--safe-top) + var(--space-3));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.update-pop-enter-active,
+.update-pop-leave-active {
+  transition:
+    opacity 0.2s var(--ease-out),
+    transform 0.2s var(--ease-out);
+}
+
+.update-pop-enter-from,
+.update-pop-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .push-enter-active,
   .push-leave-active,
   .pop-enter-active,
-  .pop-leave-active {
+  .pop-leave-active,
+  .update-pop-enter-active,
+  .update-pop-leave-active {
     transition: opacity 0.15s ease;
+  }
+  .update-pop-enter-from,
+  .update-pop-leave-to {
+    transform: translateX(-50%);
   }
   .push-enter-from,
   .push-leave-to,
