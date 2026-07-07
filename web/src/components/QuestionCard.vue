@@ -68,7 +68,15 @@ async function submit(optionIndexes: number[]) {
           :disabled="sending || submitted"
           @click="toggle(i)"
         >
-          <span class="qc-check" aria-hidden="true">{{ selected.has(i) ? '☑' : '☐' }}</span>
+          <span class="qc-check" aria-hidden="true">
+            <svg v-if="selected.has(i)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="5" stroke-linejoin="round" />
+              <path d="M7 12.5l3.2 3.2L17 8.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="5" stroke-linejoin="round" />
+            </svg>
+          </span>
           <span class="qc-opt-text">
             <span class="qc-opt-label">{{ opt.label }}</span>
             <span v-if="opt.description" class="qc-opt-desc">{{ opt.description }}</span>
@@ -188,9 +196,13 @@ async function submit(optionIndexes: number[]) {
 
 .qc-check {
   flex: 0 0 auto;
+  display: flex;
   color: var(--accent-strong);
-  font-size: 1.05em;
-  line-height: 1.3;
+}
+
+.qc-check svg {
+  width: 18px;
+  height: 18px;
 }
 
 .qc-opt-text {

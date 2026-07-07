@@ -11,6 +11,14 @@ const sending = ref(false)
 const resuming = ref(false)
 const copied = ref(false)
 const errorMsg = ref<string | null>(null)
+let errorTimer: ReturnType<typeof setTimeout> | undefined
+
+// shared error flash: set the message, clear any prior pending clear, then auto-clear
+function flashError(msg: string) {
+  errorMsg.value = msg
+  clearTimeout(errorTimer)
+  errorTimer = setTimeout(() => (errorMsg.value = null), 2200)
+}
 
 function autoGrow() {
   const el = textareaEl.value
@@ -28,8 +36,7 @@ async function copy() {
     copied.value = true
     setTimeout(() => (copied.value = false), 1600)
   } catch {
-    errorMsg.value = 'copy failed — clipboard unavailable'
-    setTimeout(() => (errorMsg.value = null), 2200)
+    flashError('copy failed — clipboard unavailable')
   }
 }
 
@@ -44,13 +51,13 @@ async function send() {
       body: JSON.stringify({ text: draft.value }),
     })
     if (res.status === 409) {
-      errorMsg.value = 'session inactive'
+      flashError('session inactive')
       return
     }
     if (!res.ok) throw new Error(`send failed (${res.status})`)
     clear()
   } catch (err) {
-    errorMsg.value = err instanceof Error ? err.message : 'send failed'
+    flashError(err instanceof Error ? err.message : 'send failed')
   } finally {
     sending.value = false
   }
@@ -68,12 +75,12 @@ async function resume() {
       body: '{}',
     })
     if (res.status === 409) {
-      errorMsg.value = 'already active'
+      flashError('already active')
       return
     }
     if (!res.ok) throw new Error(`resume failed (${res.status})`)
   } catch (err) {
-    errorMsg.value = err instanceof Error ? err.message : 'resume failed'
+    flashError(err instanceof Error ? err.message : 'resume failed')
   } finally {
     resuming.value = false
   }
@@ -102,6 +109,17 @@ async function resume() {
         :disabled="!draft.trim() || sending"
         @click="send"
       >
+        <svg
+          v-if="!sending"
+          class="draft-btn-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
         {{ sending ? 'sending…' : 'send' }}
       </button>
       <button v-else class="draft-btn draft-btn-primary" type="button" :disabled="resuming" @click="resume">
@@ -162,6 +180,10 @@ async function resume() {
 }
 
 .draft-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   min-height: 44px;
   padding: 0 18px;
   border-radius: var(--radius-md);
@@ -170,6 +192,12 @@ async function resume() {
   border: 1px solid var(--line);
   cursor: pointer;
   transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.draft-btn-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .draft-btn:active {

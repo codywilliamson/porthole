@@ -56,7 +56,17 @@ function toggle() {
 
   <div v-else-if="item.kind === 'thinking'" class="ev ev-thinking">
     <button class="ev-disclosure ev-disclosure-quiet" type="button" :aria-expanded="expanded" @click="toggle">
-      <span class="ev-chevron" :class="{ 'is-open': expanded }" aria-hidden="true">›</span>
+      <svg
+        class="ev-chevron"
+        :class="{ 'is-open': expanded }"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        aria-hidden="true"
+      >
+        <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
       <span class="ev-thinking-label">thinking</span>
     </button>
     <div class="ev-collapse" :class="{ 'is-open': expanded }">
@@ -76,7 +86,17 @@ function toggle() {
 
   <div v-else-if="item.kind === 'tool_pair'" class="ev ev-tool" :class="{ 'is-error': isError }">
     <button class="ev-disclosure" type="button" :aria-expanded="expanded" @click="toggle">
-      <span class="ev-chevron" :class="{ 'is-open': expanded }" aria-hidden="true">›</span>
+      <svg
+        class="ev-chevron"
+        :class="{ 'is-open': expanded }"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        aria-hidden="true"
+      >
+        <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
       <span class="ev-tool-name mono" :title="toolNameFull">{{ toolName }}</span>
       <span v-if="toolInputHint" class="ev-tool-hint mono">{{ toolInputHint }}</span>
       <span class="ev-tool-flag-wrap">
@@ -225,7 +245,8 @@ function toggle() {
 
 .ev-chevron {
   flex: 0 0 auto;
-  display: inline-block;
+  width: 14px;
+  height: 14px;
   transition: transform 0.22s var(--ease-out);
   color: var(--ink-3);
 }
