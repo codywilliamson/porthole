@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- simplified porthole mark, tuned to read at 16px -->
+  <defs>
+    <linearGradient id="r" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#ffd08a"/>
+      <stop offset="1" stop-color="#d18f3e"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="24" fill="#0b1c21"/>
+  <path d="M12 38 Q 32 32.5 52 38" fill="none" stroke="#4fd6c4" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#r)" stroke-width="7"/>
+</svg>
