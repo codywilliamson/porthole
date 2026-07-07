@@ -57,6 +57,11 @@ interface Meta {
   projectPath: string
   entrypoint: string
   eventCount: number
+  // epoch ms of the newest timestamped line — the real "last activity". file
+  // mtime is NOT a proxy: claude rewrites timestamp-less bookkeeping lines
+  // (last-prompt/mode/permission-mode/ai-title) long after a convo ends, so an
+  // idle session's file gets touched "now" while its last event is days old.
+  lastEventTime: number
 }
 
 interface CacheEntry extends Meta {
@@ -180,6 +185,7 @@ function deriveMeta(raw: string): Meta {
   let projectPath = ''
   let entrypoint = ''
   let eventCount = 0
+  let lastEventTime = 0
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed) continue
@@ -192,6 +198,11 @@ function deriveMeta(raw: string): Meta {
     if (obj?.type === 'ai-title' && typeof obj.aiTitle === 'string') lastTitle = obj.aiTitle
     if (!projectPath && typeof obj?.cwd === 'string' && obj.cwd) projectPath = obj.cwd
     if (!entrypoint && typeof obj?.entrypoint === 'string' && obj.entrypoint) entrypoint = obj.entrypoint
+    // real convo/tool/system lines carry a timestamp; bookkeeping lines don't
+    if (typeof obj?.timestamp === 'string') {
+      const t = Date.parse(obj.timestamp)
+      if (t > lastEventTime) lastEventTime = t // NaN never wins
+    }
     const events = eventsFromObj(obj)
     eventCount += events.length
     if (!firstUserText) {
@@ -204,6 +215,7 @@ function deriveMeta(raw: string): Meta {
     projectPath,
     entrypoint,
     eventCount,
+    lastEventTime,
   }
 }
 
@@ -251,7 +263,9 @@ export async function discoverSessions(projectsDir: string): Promise<DiscoveredS
             id: basename(name, '.jsonl'),
             filePath,
             projectDir,
-            lastModified: st.mtimeMs,
+            // last real activity, not file mtime — fall back to mtime only when
+            // the file has no timestamped events at all
+            lastModified: meta.lastEventTime || st.mtimeMs,
             eventCount: meta.eventCount,
             projectPath: meta.projectPath,
             entrypoint: meta.entrypoint,
