@@ -65,7 +65,14 @@ const rowEnter = (i: number) =>
     </header>
 
     <div class="sl-body">
-      <p v-if="error" class="sl-state sl-state-error">reception lost — {{ error }}</p>
+      <div v-if="error" class="sl-state sl-state-error empty-state">
+        <svg class="empty-icon empty-icon-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v4" stroke-linecap="round" />
+          <path d="M12 16h.01" stroke-linecap="round" />
+        </svg>
+        <p>reception lost — {{ error }}</p>
+      </div>
       <div v-else-if="loading && sessions.length === 0" class="sl-rows" aria-hidden="true">
         <div v-for="i in 5" :key="i" class="sl-row sl-row-skel">
           <span class="skel skel-dot"></span>
@@ -76,9 +83,13 @@ const rowEnter = (i: number) =>
         </div>
         <span class="visually-hidden" role="status">scanning for sessions…</span>
       </div>
-      <p v-else-if="sessions.length === 0" class="sl-state">
-        no sessions yet.<br />start claude code in a tmux window to see it here.
-      </p>
+      <div v-else-if="sessions.length === 0" class="sl-state empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12q9-4 18 0" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <p>no sessions yet.<br />start one with + below, or run claude in tmux.</p>
+      </div>
 
       <template v-else>
         <section v-if="activeSessions.length" class="sl-section">
@@ -95,6 +106,7 @@ const rowEnter = (i: number) =>
               @click="goToSession(s.id)"
             >
               <span class="sl-dot sl-dot-active" aria-hidden="true"></span>
+              <span class="visually-hidden">active</span>
               <span class="sl-row-main">
                 <span class="sl-row-title no-select">{{ s.title || 'untitled session' }}</span>
                 <span class="sl-row-meta no-select">
@@ -124,6 +136,7 @@ const rowEnter = (i: number) =>
               @click="goToSession(s.id)"
             >
               <span class="sl-dot sl-dot-idle" aria-hidden="true"></span>
+              <span class="visually-hidden">idle</span>
               <span class="sl-row-main">
                 <span class="sl-row-title no-select">{{ s.title || 'untitled session' }}</span>
                 <span class="sl-row-meta no-select">

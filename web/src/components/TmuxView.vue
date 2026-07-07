@@ -80,8 +80,21 @@ async function doClose(p: PaneInfo) {
         </div>
         <span class="visually-hidden" role="status">loading panes…</span>
       </div>
-      <p v-else-if="error && panes.length === 0" class="tv-empty tv-empty-err">{{ error }}</p>
-      <p v-else-if="panes.length === 0" class="tv-empty">no tmux panes running.</p>
+      <div v-else-if="error && panes.length === 0" class="tv-empty tv-empty-err empty-state">
+        <svg class="empty-icon empty-icon-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v4" stroke-linecap="round" />
+          <path d="M12 16h.01" stroke-linecap="round" />
+        </svg>
+        <p>{{ error }}</p>
+      </div>
+      <div v-else-if="panes.length === 0" class="tv-empty empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M12 4v16M3 12h9" stroke-linecap="round" />
+        </svg>
+        <p>no tmux panes running.</p>
+      </div>
 
       <TransitionGroup v-else name="pane" tag="ul" class="tv-list">
         <li v-for="p in panes" :key="p.target" class="tv-row" :class="{ 'is-claude': p.hasClaude }">
@@ -102,7 +115,12 @@ async function doClose(p: PaneInfo) {
 
           <div v-if="p.hasClaude" class="tv-actions">
             <template v-if="confirming !== p.target">
-              <button class="tv-act" type="button" @click="doNudge(p, 'enter')">⏎</button>
+              <button class="tv-act" type="button" aria-label="nudge enter" @click="doNudge(p, 'enter')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 4v7a4 4 0 0 1-4 4H4" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M9 10l-5 5 5 5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
               <button class="tv-act" type="button" @click="doNudge(p, 'escape')">esc</button>
               <button
                 v-if="p.sessionId"
@@ -111,7 +129,9 @@ async function doClose(p: PaneInfo) {
                 aria-label="close window"
                 @click="confirming = p.target"
               >
-                ✕
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
+                </svg>
               </button>
             </template>
             <template v-else>
@@ -336,7 +356,15 @@ async function doClose(p: PaneInfo) {
   background: var(--bg-1);
   color: var(--ink-1);
   font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+}
+
+.tv-act svg {
+  width: 18px;
+  height: 18px;
 }
 
 .tv-act:active {

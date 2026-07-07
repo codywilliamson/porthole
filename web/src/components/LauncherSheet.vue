@@ -107,7 +107,12 @@ onMounted(() => {
               </div>
               <span class="visually-hidden" role="status">loading…</span>
             </div>
-            <p v-else-if="projects.length === 0" class="ls-state">no known projects yet</p>
+            <div v-else-if="projects.length === 0" class="ls-state empty-state">
+              <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke-linejoin="round" />
+              </svg>
+              <p>no known projects yet</p>
+            </div>
             <div v-else class="ls-rows">
               <template v-for="p in projects" :key="p.path">
                 <Transition name="ls-swap" mode="out-in">
@@ -160,7 +165,12 @@ onMounted(() => {
               </div>
               <span class="visually-hidden" role="status">loading…</span>
             </div>
-            <p v-else-if="dirs.length === 0" class="ls-state">no subdirectories</p>
+            <div v-else-if="dirs.length === 0" class="ls-state empty-state">
+              <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke-linejoin="round" />
+              </svg>
+              <p>no subdirectories</p>
+            </div>
             <div v-else class="ls-rows">
               <button
                 v-for="name in dirs"

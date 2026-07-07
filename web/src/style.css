@@ -200,3 +200,23 @@ button {
 .skel-line-sm {
   height: 10px;
 }
+
+/* shared layout for empty/error states — quiet icon stacked above terse copy.
+   used by SessionList, TmuxView, LauncherSheet so it isn't redefined per view. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.empty-icon {
+  width: 30px;
+  height: 30px;
+  color: var(--ink-3);
+}
+
+.empty-icon-danger {
+  color: var(--danger);
+}

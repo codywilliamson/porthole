@@ -133,7 +133,10 @@ onUnmounted(() => {
 
     <Transition name="pill">
       <button v-if="hasNewBelow" class="jump-pill mono" type="button" @click="scrollToBottom(true)">
-        new events ↓
+        new events
+        <svg class="jump-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 5v14M5 12l7 7 7-7" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
       </button>
     </Transition>
   </div>
@@ -239,6 +242,9 @@ onUnmounted(() => {
   left: 50%;
   bottom: var(--space-4);
   transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: var(--accent);
   color: var(--accent-ink);
   border: none;
@@ -248,6 +254,11 @@ onUnmounted(() => {
   font-weight: 600;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   cursor: pointer;
+}
+
+.jump-pill-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .ev-move,
