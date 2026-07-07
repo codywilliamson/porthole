@@ -149,10 +149,21 @@ async function closeWindow() {
     </p>
 
     <div class="sv-body">
-      <TranscriptView :events="events" :status="status" :active="active" />
+      <Transition name="sv-gone" appear>
+        <div v-if="status === 'gone'" class="sv-gone empty-state">
+          <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M16 16l5 5" stroke-linecap="round" />
+            <path d="M8 11h6" stroke-linecap="round" />
+          </svg>
+          <p>session not found —<br />it may have been removed or compacted.</p>
+          <button class="sv-gone-back" type="button" @click="goToList()">back to sessions</button>
+        </div>
+        <TranscriptView v-else :events="events" :status="status" :active="active" />
+      </Transition>
     </div>
 
-    <DraftPad :session-id="sessionId" :active="active" />
+    <DraftPad v-if="status !== 'gone'" :session-id="sessionId" :active="active" />
   </div>
 </template>
 
@@ -401,6 +412,43 @@ async function closeWindow() {
   min-height: 0;
 }
 
+.sv-gone {
+  height: 100%;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+
+.sv-gone-back {
+  margin-top: var(--space-2);
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--ink-1);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.sv-gone-back:active {
+  background: var(--bg-2-hover);
+}
+
+.sv-gone-enter-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s var(--ease-out);
+}
+
+.sv-gone-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sv-dot {
     animation: none;
@@ -408,6 +456,12 @@ async function closeWindow() {
   .sv-menu-pop-enter-active,
   .sv-menu-pop-leave-active {
     transition: opacity 0.12s ease;
+  }
+  .sv-gone-enter-active {
+    transition: opacity 0.15s ease;
+  }
+  .sv-gone-enter-from {
+    transform: none;
   }
 }
 </style>

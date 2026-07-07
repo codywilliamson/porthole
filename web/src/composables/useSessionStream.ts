@@ -1,7 +1,10 @@
 import { onUnmounted, ref } from 'vue'
 import type { SessionSummary, TranscriptEvent } from '../../../shared/types'
 
-export type StreamStatus = 'connecting' | 'live' | 'reconnecting'
+// 'gone' = the stream failed permanently (404 session not found / removed) —
+// EventSource won't retry, so we surface a dead-end state instead of a
+// forever-"reconnecting" banner.
+export type StreamStatus = 'connecting' | 'live' | 'reconnecting' | 'gone'
 
 interface InitPayload {
   session: SessionSummary
@@ -59,7 +62,8 @@ export function useSessionStream(sessionId: string) {
     status.value = 'live'
   }
   source.onerror = () => {
-    status.value = 'reconnecting'
+    // CLOSED = browser gave up (non-2xx like a 404); CONNECTING = it'll retry
+    status.value = source.readyState === EventSource.CLOSED ? 'gone' : 'reconnecting'
   }
 
   onUnmounted(() => {
