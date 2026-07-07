@@ -8,7 +8,15 @@ import { groupEvents } from '../utils/transcript'
 import EventBlock from './EventBlock.vue'
 import QuestionCard from './QuestionCard.vue'
 
-const props = defineProps<{ events: TranscriptEvent[]; status: StreamStatus }>()
+const props = defineProps<{ events: TranscriptEvent[]; status: StreamStatus; active: boolean }>()
+
+// claude is composing: session live and the newest event is ours. assistant
+// blocks only hit the jsonl when they complete, so this gap is exactly the
+// "typing" window of a chat app.
+const typing = computed(() => {
+  const last = props.events[props.events.length - 1]
+  return props.active && last?.kind === 'user_message'
+})
 
 // a live AskUserQuestion picker is never in the jsonl (claude buffers it), so we
 // poll the pane for it here — the parent SessionView chain is owned elsewhere.
@@ -90,6 +98,11 @@ watch(pendingQuestion, (q, prev) => {
   if (q && !prev) onContentGrew()
 })
 
+// same for the typing bubble
+watch(typing, (t, prev) => {
+  if (t && !prev) onContentGrew()
+})
+
 onMounted(() => {
   scrollToBottom(false)
   pollQuestion()
@@ -120,6 +133,14 @@ onUnmounted(() => {
           <EventBlock v-for="it in visibleItems" :key="it.key" :item="it" />
         </TransitionGroup>
       </template>
+      <Transition name="qc-pop">
+        <div v-if="typing" class="typing" role="status">
+          <span class="typing-dot" aria-hidden="true"></span>
+          <span class="typing-dot" aria-hidden="true"></span>
+          <span class="typing-dot" aria-hidden="true"></span>
+          <span class="visually-hidden">claude is working…</span>
+        </div>
+      </Transition>
       <Transition name="qc-pop">
         <QuestionCard
           v-if="pendingQuestion && sessionId"
@@ -230,6 +251,48 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
 }
 
+/* typing bubble — claude-side chat bubble with a soft amber dot wave */
+.typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-4);
+  padding: 13px 15px;
+  border-radius: var(--radius-md);
+  border-bottom-left-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+}
+
+.typing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: typing-wave 1.2s var(--ease-out) infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes typing-wave {
+  0%,
+  55%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  26% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 .transcript-empty {
   text-align: center;
   color: var(--ink-3);
@@ -305,6 +368,10 @@ onUnmounted(() => {
   .qc-pop-enter-active,
   .qc-pop-leave-active {
     transition: opacity 0.15s ease;
+  }
+  .typing-dot {
+    animation: none;
+    opacity: 0.6;
   }
 }
 </style>

@@ -149,7 +149,7 @@ async function closeWindow() {
     </p>
 
     <div class="sv-body">
-      <TranscriptView :events="events" :status="status" />
+      <TranscriptView :events="events" :status="status" :active="active" />
     </div>
 
     <DraftPad :session-id="sessionId" :active="active" />
