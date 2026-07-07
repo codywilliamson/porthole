@@ -153,6 +153,8 @@ function toggle() {
   padding: var(--space-3);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
   margin: 0 0 var(--space-3);
 }
 
@@ -167,6 +169,8 @@ function toggle() {
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
   border-collapse: collapse;
   margin: 0 0 var(--space-3);
 }
@@ -379,6 +383,8 @@ function toggle() {
   max-height: 40vh;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
   background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);

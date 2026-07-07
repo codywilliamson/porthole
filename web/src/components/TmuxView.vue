@@ -59,8 +59,8 @@ async function doClose(p: PaneInfo) {
         </svg>
       </button>
       <div class="tv-heading">
-        <h1 class="tv-title">tmux panes</h1>
-        <p class="tv-sub">{{ panes.length }} pane{{ panes.length === 1 ? '' : 's' }}</p>
+        <h1 class="tv-title no-select">tmux panes</h1>
+        <p class="tv-sub no-select">{{ panes.length }} pane{{ panes.length === 1 ? '' : 's' }}</p>
       </div>
       <button class="tv-refresh" type="button" aria-label="refresh" @click="refresh()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -75,7 +75,7 @@ async function doClose(p: PaneInfo) {
       <p v-else-if="error && panes.length === 0" class="tv-empty tv-empty-err">{{ error }}</p>
       <p v-else-if="panes.length === 0" class="tv-empty">no tmux panes running.</p>
 
-      <ul v-else class="tv-list">
+      <TransitionGroup v-else name="pane" tag="ul" class="tv-list">
         <li v-for="p in panes" :key="p.target" class="tv-row" :class="{ 'is-claude': p.hasClaude }">
           <button
             class="tv-row-main"
@@ -121,7 +121,7 @@ async function doClose(p: PaneInfo) {
           </div>
           <p v-if="rowError[p.target]" class="tv-row-err">{{ rowError[p.target] }}</p>
         </li>
-      </ul>
+      </TransitionGroup>
     </div>
   </div>
 </template>
@@ -188,6 +188,8 @@ async function doClose(p: PaneInfo) {
   min-height: 0;
   overflow-y: auto;
   overflow-x: clip;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: var(--space-4);
   padding-left: calc(var(--space-4) + var(--safe-left));
   padding-right: calc(var(--space-4) + var(--safe-right));
@@ -206,6 +208,7 @@ async function doClose(p: PaneInfo) {
 }
 
 .tv-list {
+  position: relative;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -296,7 +299,7 @@ async function doClose(p: PaneInfo) {
 
 .tv-act {
   min-width: 44px;
-  height: 36px;
+  height: 44px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
@@ -329,5 +332,33 @@ async function doClose(p: PaneInfo) {
   padding: 0 var(--space-4) var(--space-3);
   font-size: var(--text-xs);
   color: var(--danger);
+}
+
+.pane-move,
+.pane-enter-active,
+.pane-leave-active {
+  transition: all 0.3s var(--ease-out);
+}
+
+.pane-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.pane-leave-to {
+  opacity: 0;
+}
+
+.pane-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-move,
+  .pane-enter-active,
+  .pane-leave-active {
+    transition: opacity 0.15s ease;
+  }
 }
 </style>

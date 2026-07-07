@@ -74,16 +74,16 @@ async function closeWindow() {
       </button>
 
       <div class="sv-heading">
-        <h1 class="sv-title mono">{{ title }}</h1>
-        <p v-if="projectPath" class="sv-path mono">{{ projectPath }}</p>
+        <h1 class="sv-title mono no-select">{{ title }}</h1>
+        <p v-if="projectPath" class="sv-path mono no-select">{{ projectPath }}</p>
       </div>
 
       <div class="sv-status">
-        <span v-if="active" class="sv-badge sv-badge-active">
+        <span v-if="active" class="sv-badge sv-badge-active no-select">
           <span class="sv-dot" aria-hidden="true"></span>
           <span v-if="tmuxTarget" class="mono">{{ tmuxTarget }}</span>
         </span>
-        <span v-else class="sv-badge sv-badge-idle">inactive</span>
+        <span v-else class="sv-badge sv-badge-idle no-select">inactive</span>
       </div>
 
       <div v-if="active" class="sv-menu-wrap">
@@ -101,9 +101,11 @@ async function closeWindow() {
           </svg>
         </button>
 
-        <template v-if="menuOpen">
-          <div class="sv-menu-backdrop" @click="closeMenu"></div>
-          <div class="sv-menu" role="menu">
+        <Transition name="sv-menu-fade">
+          <div v-if="menuOpen" class="sv-menu-backdrop" @click="closeMenu"></div>
+        </Transition>
+        <Transition name="sv-menu-pop">
+          <div v-if="menuOpen" class="sv-menu" role="menu">
             <template v-if="!confirmingClose">
               <button class="sv-menu-item" type="button" role="menuitem" @click="doNudge('enter')">
                 nudge enter
@@ -136,7 +138,7 @@ async function closeWindow() {
               </div>
             </template>
           </div>
-        </template>
+        </Transition>
       </div>
     </header>
 
@@ -260,14 +262,37 @@ async function closeWindow() {
   /* solid surface — translucent glass over the animated shader was unreadable */
   background: var(--bg-2);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.66);
-  animation: sv-menu-in 0.16s var(--ease-out);
 }
 
-@keyframes sv-menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.98);
-  }
+.sv-menu-pop-enter-active {
+  transition:
+    opacity 0.16s var(--ease-out),
+    transform 0.16s var(--ease-out);
+}
+
+.sv-menu-pop-leave-active {
+  transition:
+    opacity 0.12s var(--ease-out),
+    transform 0.12s var(--ease-out);
+}
+
+.sv-menu-pop-enter-from,
+.sv-menu-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+.sv-menu-fade-enter-active {
+  transition: opacity 0.16s ease;
+}
+
+.sv-menu-fade-leave-active {
+  transition: opacity 0.12s ease;
+}
+
+.sv-menu-fade-enter-from,
+.sv-menu-fade-leave-to {
+  opacity: 0;
 }
 
 .sv-menu-item {
@@ -380,6 +405,10 @@ async function closeWindow() {
 @media (prefers-reduced-motion: reduce) {
   .sv-dot {
     animation: none;
+  }
+  .sv-menu-pop-enter-active,
+  .sv-menu-pop-leave-active {
+    transition: opacity 0.12s ease;
   }
 }
 </style>

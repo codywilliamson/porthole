@@ -138,7 +138,7 @@ async function resume() {
   border-radius: var(--radius-md);
   padding: var(--space-3);
   color: var(--ink-1);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   line-height: 1.5;
   max-height: 240px;
   overflow-y: auto;

@@ -35,8 +35,8 @@ const rowEnter = (i: number) =>
   <div class="session-list">
     <header class="sl-header">
       <div>
-        <h1 class="sl-title">porthole</h1>
-        <p class="sl-subtitle">{{ sessions.length }} session{{ sessions.length === 1 ? '' : 's' }} · claude code</p>
+        <h1 class="sl-title no-select">porthole</h1>
+        <p class="sl-subtitle no-select">{{ sessions.length }} session{{ sessions.length === 1 ? '' : 's' }} · claude code</p>
       </div>
       <div class="sl-header-actions">
         <button class="sl-icon-btn" type="button" aria-label="tmux panes" @click="goToTmux()">
@@ -73,7 +73,7 @@ const rowEnter = (i: number) =>
 
       <template v-else>
         <section v-if="activeSessions.length" class="sl-section">
-          <h2 class="sl-section-label">active</h2>
+          <h2 class="sl-section-label no-select">active</h2>
           <TransitionGroup name="row" tag="div" class="sl-rows">
             <button
               v-for="(s, i) in activeSessions"
@@ -87,8 +87,8 @@ const rowEnter = (i: number) =>
             >
               <span class="sl-dot sl-dot-active" aria-hidden="true"></span>
               <span class="sl-row-main">
-                <span class="sl-row-title">{{ s.title || 'untitled session' }}</span>
-                <span class="sl-row-meta">
+                <span class="sl-row-title no-select">{{ s.title || 'untitled session' }}</span>
+                <span class="sl-row-meta no-select">
                   <span class="sl-path">{{ truncateMiddle(s.projectPath, 34) }}</span>
                   <span class="sl-dot-sep">·</span>
                   <span>{{ relativeTime(s.lastModified) }}</span>
@@ -96,13 +96,13 @@ const rowEnter = (i: number) =>
                   <span>{{ s.eventCount }} events</span>
                 </span>
               </span>
-              <span v-if="s.tmuxTarget" class="sl-badge mono">{{ s.tmuxTarget }}</span>
+              <span v-if="s.tmuxTarget" class="sl-badge mono no-select">{{ s.tmuxTarget }}</span>
             </button>
           </TransitionGroup>
         </section>
 
         <section v-if="recentSessions.length" class="sl-section">
-          <h2 class="sl-section-label">recent</h2>
+          <h2 class="sl-section-label no-select">recent</h2>
           <TransitionGroup name="row" tag="div" class="sl-rows">
             <button
               v-for="(s, i) in recentSessions"
@@ -116,8 +116,8 @@ const rowEnter = (i: number) =>
             >
               <span class="sl-dot sl-dot-idle" aria-hidden="true"></span>
               <span class="sl-row-main">
-                <span class="sl-row-title">{{ s.title || 'untitled session' }}</span>
-                <span class="sl-row-meta">
+                <span class="sl-row-title no-select">{{ s.title || 'untitled session' }}</span>
+                <span class="sl-row-meta no-select">
                   <span class="sl-path">{{ truncateMiddle(s.projectPath, 34) }}</span>
                   <span class="sl-dot-sep">·</span>
                   <span>{{ relativeTime(s.lastModified) }}</span>
@@ -215,6 +215,8 @@ const rowEnter = (i: number) =>
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 0 var(--space-4) calc(var(--space-7) + var(--safe-bottom));
   padding-left: calc(var(--space-4) + var(--safe-left));
   padding-right: calc(var(--space-4) + var(--safe-right));

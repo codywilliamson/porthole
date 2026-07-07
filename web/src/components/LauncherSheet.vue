@@ -58,7 +58,7 @@ onMounted(() => {
         <div class="ls-grip" aria-hidden="true"></div>
 
         <header class="ls-head">
-          <h2 class="ls-title">launch session</h2>
+          <h2 class="ls-title no-select">launch session</h2>
           <button class="ls-x" type="button" aria-label="close" @click="requestClose">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
@@ -98,33 +98,35 @@ onMounted(() => {
           <p v-if="launchError" class="ls-error ls-error-top">{{ launchError }}</p>
 
           <section class="ls-section">
-            <h3 class="ls-label">recent projects</h3>
+            <h3 class="ls-label no-select">recent projects</h3>
             <p v-if="projectsError" class="ls-state ls-state-error">{{ projectsError }}</p>
             <p v-else-if="projectsLoading && projects.length === 0" class="ls-state">loading…</p>
             <p v-else-if="projects.length === 0" class="ls-state">no known projects yet</p>
             <div v-else class="ls-rows">
               <template v-for="p in projects" :key="p.path">
-                <div v-if="confirmingPath === p.path" class="ls-confirm">
-                  <span class="ls-confirm-q">launch claude here?</span>
-                  <div class="ls-confirm-actions">
-                    <button class="ls-mini ls-mini-ghost" type="button" @click="confirmingPath = null">
-                      cancel
-                    </button>
-                    <button class="ls-mini ls-mini-go" type="button" @click="confirmLaunch(p.path)">
-                      launch
-                    </button>
+                <Transition name="ls-swap" mode="out-in">
+                  <div v-if="confirmingPath === p.path" class="ls-confirm">
+                    <span class="ls-confirm-q">launch claude here?</span>
+                    <div class="ls-confirm-actions">
+                      <button class="ls-mini ls-mini-ghost" type="button" @click="confirmingPath = null">
+                        cancel
+                      </button>
+                      <button class="ls-mini ls-mini-go" type="button" @click="confirmLaunch(p.path)">
+                        launch
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <button v-else class="ls-proj" type="button" @click="confirmingPath = p.path">
-                  <span class="ls-proj-name mono">{{ basename(p.path) }}</span>
-                  <span class="ls-proj-path mono">{{ p.path }}</span>
-                </button>
+                  <button v-else class="ls-proj" type="button" @click="confirmingPath = p.path">
+                    <span class="ls-proj-name mono">{{ basename(p.path) }}</span>
+                    <span class="ls-proj-path mono">{{ p.path }}</span>
+                  </button>
+                </Transition>
               </template>
             </div>
           </section>
 
           <section class="ls-section">
-            <h3 class="ls-label">browse</h3>
+            <h3 class="ls-label no-select">browse</h3>
             <nav class="ls-crumbs mono" aria-label="breadcrumb">
               <template v-for="(c, i) in crumbs" :key="c.rel">
                 <span v-if="i > 0" class="ls-crumb-sep" aria-hidden="true">/</span>
@@ -251,6 +253,8 @@ onMounted(() => {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 0 var(--space-4) calc(var(--space-5) + var(--safe-bottom));
   padding-left: calc(var(--space-4) + var(--safe-left));
   padding-right: calc(var(--space-4) + var(--safe-right));
@@ -345,7 +349,7 @@ onMounted(() => {
 }
 
 .ls-mini {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -554,6 +558,17 @@ onMounted(() => {
 
 .scrim-enter-from,
 .scrim-leave-to {
+  opacity: 0;
+}
+
+/* recent-project row <-> inline confirm crossfade */
+.ls-swap-enter-active,
+.ls-swap-leave-active {
+  transition: opacity 0.1s ease;
+}
+
+.ls-swap-enter-from,
+.ls-swap-leave-to {
   opacity: 0;
 }
 

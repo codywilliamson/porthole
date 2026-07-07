@@ -112,13 +112,15 @@ onUnmounted(() => {
           <EventBlock v-for="it in visibleItems" :key="it.key" :item="it" />
         </TransitionGroup>
       </template>
-      <QuestionCard
-        v-if="pendingQuestion && sessionId"
-        :key="`${pendingQuestion.header ?? ''}|${pendingQuestion.question}`"
-        class="transcript-question"
-        :session-id="sessionId"
-        :question="pendingQuestion"
-      />
+      <Transition name="qc-pop">
+        <QuestionCard
+          v-if="pendingQuestion && sessionId"
+          :key="`${pendingQuestion.header ?? ''}|${pendingQuestion.question}`"
+          class="transcript-question"
+          :session-id="sessionId"
+          :question="pendingQuestion"
+        />
+      </Transition>
     </div>
 
     <Transition name="pill">
@@ -144,6 +146,8 @@ onUnmounted(() => {
   overflow-y: auto;
   overflow-x: clip; /* wide content scrolls inside pre/table wrappers, never the transcript */
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: var(--space-4);
   padding-left: calc(var(--space-4) + var(--safe-left));
   padding-right: calc(var(--space-4) + var(--safe-right));
@@ -228,11 +232,26 @@ onUnmounted(() => {
   transform: translate(-50%, 8px);
 }
 
+.qc-pop-enter-active,
+.qc-pop-leave-active {
+  transition:
+    opacity 0.2s var(--ease-out),
+    transform 0.2s var(--ease-out);
+}
+
+.qc-pop-enter-from,
+.qc-pop-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ev-move,
   .ev-enter-active,
   .pill-enter-active,
-  .pill-leave-active {
+  .pill-leave-active,
+  .qc-pop-enter-active,
+  .qc-pop-leave-active {
     transition: opacity 0.15s ease;
   }
 }

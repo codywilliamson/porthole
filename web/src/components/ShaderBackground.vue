@@ -11,6 +11,7 @@ import {
 // deep-sea porthole glass: slow drifting ink/teal/brass blobs, grainy and
 // low-contrast so transcript text always wins legibility
 const el = ref<HTMLDivElement | null>(null)
+const ready = ref(false)
 let mount: ShaderMount | null = null
 
 onMounted(() => {
@@ -47,6 +48,9 @@ onMounted(() => {
     undefined,
     reduceMotion ? 0 : 0.35,
   )
+
+  // fade in after the first frame is mounted, instead of popping in raw
+  requestAnimationFrame(() => (ready.value = true))
 })
 
 onBeforeUnmount(() => {
@@ -56,7 +60,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="el" class="shader-bg" aria-hidden="true"></div>
+  <div ref="el" class="shader-bg" :class="{ 'is-ready': ready }" aria-hidden="true"></div>
 </template>
 
 <style scoped>
@@ -65,5 +69,17 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: -2;
   background: var(--bg-0);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.shader-bg.is-ready {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shader-bg {
+    transition: none;
+  }
 }
 </style>

@@ -74,6 +74,7 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -110,6 +111,8 @@ p {
 button {
   font: inherit;
   color: inherit;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 ::selection {
@@ -146,6 +149,12 @@ button {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* ui chrome (titles, meta, badges, section labels) — not content users copy */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
