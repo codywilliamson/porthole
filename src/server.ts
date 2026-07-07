@@ -564,6 +564,11 @@ async function serveStatic(pathname: string): Promise<Response> {
     const file = Bun.file(target)
     if (await file.exists()) return new Response(file)
   }
+  // a missing hashed asset is a hard 404 — the spa fallback would hand html
+  // to a module script (and poison caches) after a deploy rolls the hashes
+  if (pathname.startsWith('/assets/')) {
+    return new Response('not found', { status: 404, headers: { 'content-type': 'text/plain' } })
+  }
   // spa fallback
   const index = Bun.file(resolve(DIST, 'index.html'))
   if (await index.exists()) return new Response(index)
