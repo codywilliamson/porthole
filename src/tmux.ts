@@ -1,13 +1,16 @@
 // input adapter — the ONLY module allowed to spawn tmux
 // safety-critical invariant: argv arrays only, never shell strings from user text
+import type { Provider } from '../shared/types'
 
 const PANE_FORMAT =
   '#{pane_pid}|#{session_name}:#{window_index}.#{pane_index}|#{pane_current_path}|#{pane_current_command}'
 const TARGET_RE = /^[\w.-]+:\d+\.\d+$/
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-// delay so claude code's tui registers the paste before Enter submits
-const PASTE_ENTER_DELAY_MS = 200
+// delay so the tui registers injected text before Enter submits — codex's
+// composer debounces input and swallows an instant Enter; claude needs it
+// for pastes only, but the delay is harmless there
+const TEXT_ENTER_DELAY_MS = 200
 // tuis debounce input, so space out multi-key sequences
 const INTER_KEY_DELAY_MS = 80
 // -P -F prints the new pane target in this format
@@ -113,13 +116,14 @@ export async function sendToPane(target: string, text: string): Promise<void> {
     const buf = `porthole-${bufferCounter++}`
     await tmuxOrThrow(['load-buffer', '-b', buf, '-'], text)
     await tmuxOrThrow(['paste-buffer', '-b', buf, '-p', '-d', '-t', target])
-    await Bun.sleep(PASTE_ENTER_DELAY_MS)
+    await Bun.sleep(TEXT_ENTER_DELAY_MS)
     await sendKey(target, 'Enter')
     return
   }
 
   // single line: -l sends literally, -- stops flag parsing of text
   await tmuxOrThrow(['send-keys', '-t', target, '-l', '--', text])
+  await Bun.sleep(TEXT_ENTER_DELAY_MS)
   await sendKey(target, 'Enter')
 }
 
@@ -183,11 +187,18 @@ export async function killWindow(target: string): Promise<void> {
   await tmuxOrThrow(['kill-window', '-t', target])
 }
 
+// per-agent resume argv — id is UUID-validated below, never raw user text
+const RESUME_ARGV: Record<Provider, (id: string) => string[]> = {
+  claude: (id) => ['claude', '--resume', id],
+  codex: (id) => ['codex', 'resume', id],
+}
+
 // open a new tmux window resuming a session
 export async function resumeSession(
   cwd: string,
   sessionId: string,
+  provider: Provider,
 ): Promise<void> {
   if (!UUID_RE.test(sessionId)) throw new Error(`invalid session id: ${sessionId}`)
-  await tmuxOrThrow(['new-window', '-c', cwd, 'claude', '--resume', sessionId])
+  await tmuxOrThrow(['new-window', '-c', cwd, ...RESUME_ARGV[provider](sessionId)])
 }

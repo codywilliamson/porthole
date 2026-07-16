@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { config } from './config'
 import { discoverSessions, parseLine, type DiscoveredSession } from './transcript'
+import { discoverCodexSessions, parseCodexLine } from './codex'
 import { getActiveTargets, paneAgent, panesWithAgent } from './activity'
 import {
   sendToPane,
@@ -54,7 +55,11 @@ function loadSessions(): Promise<LoadResult> {
   const now = Date.now()
   if (loadCache && now - loadCache.at < LOAD_TTL_MS) return loadCache.promise
   const promise = (async () => {
-    const sessions = await discoverSessions(config.projectsDir)
+    const [claude, codex] = await Promise.all([
+      discoverSessions(config.projectsDir),
+      discoverCodexSessions(config.codexDir),
+    ])
+    const sessions = [...claude, ...codex].sort((a, b) => b.lastModified - a.lastModified)
     const targets = await getActiveTargets(sessions)
     return { sessions, targets }
   })()
@@ -88,18 +93,25 @@ function touchTxCache(filePath: string, entry: TxCacheEntry): void {
   }
 }
 
+type LineParser = (line: string) => TranscriptEvent[]
+
+// which jsonl dialect a session's file speaks
+function parserFor(session: DiscoveredSession): LineParser {
+  return session.provider === 'codex' ? parseCodexLine : parseLine
+}
+
 // parse complete (newline-terminated) lines from text into out;
 // returns bytes consumed up to the last newline (incomplete tail left unparsed)
-function parseComplete(text: string, out: TranscriptEvent[]): number {
+function parseComplete(text: string, out: TranscriptEvent[], parse: LineParser): number {
   const lines = text.split('\n')
   const remainder = lines.pop() ?? ''
-  for (const line of lines) if (line.trim()) out.push(...parseLine(line))
+  for (const line of lines) if (line.trim()) out.push(...parse(line))
   return Buffer.byteLength(text, 'utf8') - Buffer.byteLength(remainder, 'utf8')
 }
 
 // warm-cached read: unchanged file → instant; grown → parse appended bytes only;
 // shrunk/new → full parse. self-heals a stale entry via the grown path.
-async function readTranscriptCached(filePath: string): Promise<TxCacheEntry> {
+async function readTranscriptCached(filePath: string, parse: LineParser): Promise<TxCacheEntry> {
   const st = await stat(filePath)
   const cached = txCache.get(filePath)
   if (cached && cached.size === st.size && cached.mtimeMs === st.mtimeMs) {
@@ -111,11 +123,11 @@ async function readTranscriptCached(filePath: string): Promise<TxCacheEntry> {
   if (cached && st.size > cached.size) {
     const chunk = await Bun.file(filePath).slice(cached.offset, st.size).text()
     events = cached.events.slice()
-    offset = cached.offset + parseComplete(chunk, events)
+    offset = cached.offset + parseComplete(chunk, events, parse)
   } else {
     const raw = await Bun.file(filePath).text()
     events = []
-    offset = parseComplete(raw, events)
+    offset = parseComplete(raw, events, parse)
   }
   const entry: TxCacheEntry = { size: st.size, mtimeMs: st.mtimeMs, events, offset }
   touchTxCache(filePath, entry)
@@ -158,6 +170,7 @@ function safeJoin(base: string, pathname: string): string | null {
 
 function streamSession(session: DiscoveredSession, summary: SessionSummary, signal: AbortSignal): Response {
   const filePath = session.filePath
+  const parse = parserFor(session)
   // offset = byte position of the first not-yet-complete line (line boundary)
   let offset = 0
   let closed = false
@@ -195,7 +208,7 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
         const startOffset = offset
         const chunk = await Bun.file(filePath).slice(startOffset, size).text()
         const events: TranscriptEvent[] = []
-        offset = startOffset + parseComplete(chunk, events)
+        offset = startOffset + parseComplete(chunk, events, parse)
         appendTxCache(filePath, startOffset, events, offset, size, mtimeMs)
         if (events.length) send('events', events)
       }
@@ -211,7 +224,7 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
         }
         if (st.size < offset) {
           // file replaced/truncated — full re-parse
-          const entry = await readTranscriptCached(filePath)
+          const entry = await readTranscriptCached(filePath, parse)
           offset = entry.offset
           send('reset', { session: summary, events: entry.events })
         } else if (st.size > offset) {
@@ -240,7 +253,7 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
       }
 
       try {
-        const entry = await readTranscriptCached(filePath)
+        const entry = await readTranscriptCached(filePath, parse)
         offset = entry.offset
         send('init', { session: summary, events: entry.events })
       } catch (err) {
@@ -354,7 +367,7 @@ async function handleResume(id: string): Promise<Response> {
   if (!session) return json({ ok: false, error: 'session not found' }, 404)
   if (targets.has(id)) return json({ ok: false, error: 'already active' }, 409)
   try {
-    await resumeSession(session.projectPath, id)
+    await resumeSession(session.projectPath, id, session.provider)
   } catch (err) {
     return json({ ok: false, error: String((err as Error).message ?? err) }, 500)
   }
@@ -509,7 +522,10 @@ function answerKeys(question: AskQuestion, optionIndexes: number[]): TmuxKey[] |
 
 async function handleQuestion(id: string): Promise<Response> {
   if (!UUID_RE.test(id)) return json({ question: null, error: 'invalid session id' }, 400)
-  const { targets } = await loadSessions()
+  const { sessions, targets } = await loadSessions()
+  // the picker parser reads claude's tui — other agents never have one
+  const session = sessions.find((s) => s.id === id)
+  if (!session || session.provider !== 'claude') return json({ question: null })
   const target = targets.get(id)
   if (!target) return json({ question: null })
   const pane = await capturePane(target)
@@ -533,7 +549,11 @@ async function handleAnswer(id: string, req: Request): Promise<Response> {
     return json({ ok: false, error: 'optionIndexes required' }, 400)
   }
 
-  const { targets } = await loadSessions()
+  const { sessions, targets } = await loadSessions()
+  const session = sessions.find((s) => s.id === id)
+  if (session && session.provider !== 'claude') {
+    return json({ ok: false, error: 'answering not supported for this agent' }, 409)
+  }
   const target = targets.get(id)
   if (!target) return json({ ok: false, error: 'session not active' }, 409)
 
