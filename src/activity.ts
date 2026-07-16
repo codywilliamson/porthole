@@ -1,6 +1,7 @@
-// active detection: correlate running claude processes with sessions and tmux targets
-// consumes tmux.listPanes() — never spawns tmux itself
+// active detection: correlate running agent processes (claude/codex) with sessions
+// and tmux targets. consumes tmux.listPanes() — never spawns tmux itself
 import { readFileSync, readdirSync, readlinkSync } from 'node:fs'
+import type { Provider } from '../shared/types'
 import type { DiscoveredSession } from './transcript'
 import { listPanes, type Pane } from './tmux'
 
@@ -57,29 +58,38 @@ function readArgv(pid: number): string[] {
   }
 }
 
-// claude = comm 'claude', or argv0 basename 'claude', or node running claude
-function isClaude(info: ProcInfo): boolean {
-  if (info.comm === 'claude') return true
+// claude = comm 'claude', or argv0 basename 'claude', or node running claude.
+// codex = comm/argv0 starting with 'codex' (native binary is codex-linux-x64),
+// or node running the codex.js shim.
+function agentOf(info: ProcInfo): Provider | null {
+  if (info.comm === 'claude') return 'claude'
+  if (info.comm.startsWith('codex')) return 'codex'
   const argv = readArgv(info.pid)
-  if (argv.length === 0) return false
+  if (argv.length === 0) return null
   const a0 = basename(argv[0])
-  if (a0 === 'claude') return true
-  if (a0 === 'node' && argv[1] && basename(argv[1]) === 'claude') return true
-  return false
+  if (a0 === 'claude') return 'claude'
+  if (a0.startsWith('codex')) return 'codex'
+  if (a0 === 'node' && argv[1]) {
+    const a1 = basename(argv[1])
+    if (a1 === 'claude') return 'claude'
+    if (a1 === 'codex' || a1 === 'codex.js') return 'codex'
+  }
+  return null
 }
 
-// find first claude process in the pane_pid's tree — including pane_pid itself:
-// `tmux new-window 'claude ...'` makes the pane process claude directly, no shell parent
-function findClaudeDescendant(
+// find first agent process in the pane_pid's tree — including pane_pid itself:
+// `tmux new-window 'claude ...'` makes the pane process the agent directly, no shell parent
+function findAgentDescendant(
   panePid: number,
   children: Map<number, number[]>,
   table: Map<number, ProcInfo>,
-): number | null {
+): { pid: number; provider: Provider } | null {
   const stack = [panePid]
   while (stack.length > 0) {
     const pid = stack.pop()!
     const info = table.get(pid)
-    if (info && isClaude(info)) return pid
+    const provider = info ? agentOf(info) : null
+    if (info && provider) return { pid, provider }
     stack.push(...(children.get(pid) ?? []))
   }
   return null
@@ -93,9 +103,14 @@ function readCwd(pid: number): string | null {
   }
 }
 
-// opportunistic exact match: a fd pointing at a known session's .jsonl
-// (claude usually doesn't keep it open, so this is best-effort)
-function fdSessionMatch(pid: number, byId: Map<string, DiscoveredSession>): string | null {
+// opportunistic exact match: a fd pointing at a known session's jsonl, provider-
+// consistent with the process. matches both <uuid>.jsonl and rollout-…-<uuid>.jsonl
+// (claude usually doesn't keep it open; codex does — best-effort either way)
+function fdSessionMatch(
+  pid: number,
+  provider: Provider,
+  byId: Map<string, DiscoveredSession>,
+): string | null {
   try {
     for (const fd of readdirSync(`${PROC}/${pid}/fd`)) {
       let link: string
@@ -105,7 +120,9 @@ function fdSessionMatch(pid: number, byId: Map<string, DiscoveredSession>): stri
         continue
       }
       const m = link.match(UUID_JSONL_RE)
-      if (m && byId.has(m[1])) return m[1]
+      if (!m) continue
+      const session = byId.get(m[1].toLowerCase())
+      if (session && session.provider === provider) return session.id
     }
   } catch {
     // no fd access → skip
@@ -113,76 +130,71 @@ function fdSessionMatch(pid: number, byId: Map<string, DiscoveredSession>): stri
   return null
 }
 
-// does a live pane (by target) have a claude process in its tree?
-// works before the session's jsonl exists — used to nudge the folder-trust prompt.
-export async function paneHasClaude(target: string): Promise<boolean> {
+// which agent (if any) runs in a live pane's process tree?
+// works before the session's jsonl exists — used to gate nudges.
+export async function paneAgent(target: string): Promise<Provider | null> {
   const pane = (await listPanes()).find((p) => p.target === target)
-  if (!pane) return false
+  if (!pane) return null
   const table = readProcTable()
-  const children = new Map<number, number[]>()
-  for (const info of table.values()) {
-    const list = children.get(info.ppid)
-    if (list) list.push(info.pid)
-    else children.set(info.ppid, [info.pid])
-  }
-  return findClaudeDescendant(pane.pid, children, table) !== null
+  const children = childIndex(table)
+  return findAgentDescendant(pane.pid, children, table)?.provider ?? null
 }
 
-// which of the given panes have a claude process in their tree.
-// builds the proc table once, unlike calling paneHasClaude per pane.
-export function panesWithClaude(panes: Pane[]): Set<string> {
-  const table = readProcTable()
+function childIndex(table: Map<number, ProcInfo>): Map<number, number[]> {
   const children = new Map<number, number[]>()
   for (const info of table.values()) {
     const list = children.get(info.ppid)
     if (list) list.push(info.pid)
     else children.set(info.ppid, [info.pid])
   }
-  const out = new Set<string>()
+  return children
+}
+
+// which of the given panes have an agent process in their tree, and which one.
+// builds the proc table once, unlike calling paneAgent per pane.
+export function panesWithAgent(panes: Pane[]): Map<string, Provider> {
+  const table = readProcTable()
+  const children = childIndex(table)
+  const out = new Map<string, Provider>()
   for (const pane of panes) {
-    if (findClaudeDescendant(pane.pid, children, table) !== null) out.add(pane.target)
+    const found = findAgentDescendant(pane.pid, children, table)
+    if (found) out.set(pane.target, found.provider)
   }
   return out
 }
 
-// map of sessionId -> tmux target for sessions a live claude process is writing
+// map of sessionId -> tmux target for sessions a live agent process is writing
 export async function getActiveTargets(
   sessions: DiscoveredSession[],
 ): Promise<Map<string, string>> {
   const panes = await listPanes()
   const table = readProcTable()
-
-  // ppid -> children index
-  const children = new Map<number, number[]>()
-  for (const info of table.values()) {
-    const list = children.get(info.ppid)
-    if (list) list.push(info.pid)
-    else children.set(info.ppid, [info.pid])
-  }
+  const children = childIndex(table)
 
   const byId = new Map(sessions.map((s) => [s.id, s]))
   const result = new Map<string, string>() // sessionId -> target
   const usedSessions = new Set<string>()
 
-  // resolve each pane to its live claude process + cwd
+  // resolve each pane to its live agent process + cwd
   interface Claim {
     pane: Pane
-    claudePid: number
+    agentPid: number
+    provider: Provider
     cwd: string
   }
   const claims: Claim[] = []
   for (const pane of panes) {
-    const claudePid = findClaudeDescendant(pane.pid, children, table)
-    if (claudePid === null) continue
+    const found = findAgentDescendant(pane.pid, children, table)
+    if (!found) continue
     // fall back to pane_current_path if /proc cwd read fails
-    const cwd = readCwd(claudePid) ?? pane.cwd
-    claims.push({ pane, claudePid, cwd })
+    const cwd = readCwd(found.pid) ?? pane.cwd
+    claims.push({ pane, agentPid: found.pid, provider: found.provider, cwd })
   }
 
   // pass 1: exact fd matches take priority
   const unresolved: Claim[] = []
   for (const claim of claims) {
-    const sid = fdSessionMatch(claim.claudePid, byId)
+    const sid = fdSessionMatch(claim.agentPid, claim.provider, byId)
     if (sid && !usedSessions.has(sid)) {
       result.set(sid, claim.pane.target)
       usedSessions.add(sid)
@@ -191,20 +203,25 @@ export async function getActiveTargets(
     }
   }
 
-  // pass 2: cwd matching. group panes by resolved cwd so multiple claude panes
-  // in the SAME cwd get DISTINCT sessions — heuristic: sort candidate sessions by
-  // lastModified desc, sort panes by target, pair one-to-one; leftover panes get nothing.
+  // pass 2: cwd matching within a provider. group panes by provider+cwd so multiple
+  // agent panes in the SAME cwd get DISTINCT sessions — heuristic: sort candidate
+  // sessions by lastModified desc, sort panes by target, pair one-to-one; leftover
+  // panes get nothing.
   const byCwd = new Map<string, Claim[]>()
   for (const claim of unresolved) {
-    const list = byCwd.get(claim.cwd)
+    const key = `${claim.provider}\0${claim.cwd}`
+    const list = byCwd.get(key)
     if (list) list.push(claim)
-    else byCwd.set(claim.cwd, [claim])
+    else byCwd.set(key, [claim])
   }
 
-  for (const [cwd, group] of byCwd) {
-    const inCwd = sessions.filter((s) => s.projectPath === cwd && !usedSessions.has(s.id))
-    // hook/sdk side sessions (entrypoint sdk-*) share the cwd but never own a pane —
-    // only interactive cli sessions qualify; fall back to all if entrypoint is unknown
+  for (const [key, group] of byCwd) {
+    const [provider, cwd] = key.split('\0')
+    const inCwd = sessions.filter(
+      (s) => s.provider === provider && s.projectPath === cwd && !usedSessions.has(s.id),
+    )
+    // hook/sdk/ide side sessions (entrypoint sdk-*/vscode) share the cwd but never own
+    // a pane — only interactive cli sessions qualify; fall back to all if unknown
     const cli = inCwd.filter((s) => s.entrypoint === 'cli')
     const candidates = (cli.length ? cli : inCwd).sort((a, b) => b.lastModified - a.lastModified)
     const orderedPanes = group.sort((a, b) =>

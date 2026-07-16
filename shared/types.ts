@@ -111,7 +111,7 @@ export interface PaneInfo {
   target: string // session:window.pane
   cwd: string
   command: string // pane_current_command (node/claude/zsh/...)
-  hasClaude: boolean // a claude process lives in this pane's tree
+  agent: Provider | null // which agent process lives in this pane's tree, if any
   sessionId: string | null // mapped porthole session, when one is active here
   title: string | null // that session's title
 }

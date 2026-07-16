@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { config } from './config'
 import { discoverSessions, parseLine, type DiscoveredSession } from './transcript'
-import { getActiveTargets, paneHasClaude, panesWithClaude } from './activity'
+import { getActiveTargets, paneAgent, panesWithAgent } from './activity'
 import {
   sendToPane,
   resumeSession,
@@ -306,7 +306,7 @@ async function handleStream(id: string, req: Request): Promise<Response> {
 // full tmux pane overview — every pane, mapped to its porthole session when active
 async function handlePanes(): Promise<Response> {
   const [{ sessions, targets }, panes] = await Promise.all([loadSessions(), listPanes()])
-  const claude = panesWithClaude(panes)
+  const agents = panesWithAgent(panes)
   const sessionByTarget = new Map<string, string>()
   for (const [sid, t] of targets) sessionByTarget.set(t, sid)
   const titleById = new Map(sessions.map((s) => [s.id, s.title]))
@@ -316,7 +316,7 @@ async function handlePanes(): Promise<Response> {
       target: p.target,
       cwd: p.cwd,
       command: p.command,
-      hasClaude: claude.has(p.target),
+      agent: agents.get(p.target) ?? null,
       sessionId,
       title: sessionId ? (titleById.get(sessionId) ?? null) : null,
     }
@@ -406,8 +406,8 @@ async function handleNudge(req: Request): Promise<Response> {
   if (typeof target !== 'string' || !target) return json({ ok: false, error: 'target required' }, 400)
   const tmuxKey = typeof key === 'string' ? NUDGE_KEYS[key as NudgeKey] : undefined
   if (!tmuxKey) return json({ ok: false, error: 'key must be enter or escape' }, 400)
-  // only nudge a live pane running claude (works before the jsonl exists)
-  if (!(await paneHasClaude(target))) return json({ ok: false, error: 'no claude pane at target' }, 404)
+  // only nudge a live pane running an agent (works before the jsonl exists)
+  if (!(await paneAgent(target))) return json({ ok: false, error: 'no agent pane at target' }, 404)
   try {
     await sendKey(target, tmuxKey)
     return json({ ok: true })

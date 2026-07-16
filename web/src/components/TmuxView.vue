@@ -97,7 +97,7 @@ async function doClose(p: PaneInfo) {
       </div>
 
       <TransitionGroup v-else name="pane" tag="ul" class="tv-list">
-        <li v-for="p in panes" :key="p.target" class="tv-row" :class="{ 'is-claude': p.hasClaude }">
+        <li v-for="p in panes" :key="p.target" class="tv-row" :class="{ 'is-agent': p.agent }">
           <button
             class="tv-row-main"
             type="button"
@@ -106,14 +106,14 @@ async function doClose(p: PaneInfo) {
           >
             <span class="tv-row-top">
               <span class="tv-target mono">{{ p.target }}</span>
-              <span v-if="p.hasClaude" class="tv-tag tv-tag-claude">claude</span>
+              <span v-if="p.agent" class="tv-tag tv-tag-agent">{{ p.agent }}</span>
               <span v-else class="tv-tag mono">{{ p.command }}</span>
             </span>
             <span class="tv-title-line mono">{{ p.title || p.cwd }}</span>
             <span v-if="p.title" class="tv-path mono">{{ truncateMiddle(p.cwd, 42) }}</span>
           </button>
 
-          <div v-if="p.hasClaude" class="tv-actions">
+          <div v-if="p.agent" class="tv-actions">
             <template v-if="confirming !== p.target">
               <button class="tv-act" type="button" aria-label="nudge enter" @click="doNudge(p, 'enter')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -252,7 +252,7 @@ async function doClose(p: PaneInfo) {
   overflow: hidden;
 }
 
-.tv-row.is-claude {
+.tv-row.is-agent {
   border-color: var(--accent-line);
 }
 
@@ -314,7 +314,7 @@ async function doClose(p: PaneInfo) {
   color: var(--ink-3);
 }
 
-.tv-tag-claude {
+.tv-tag-agent {
   color: var(--accent-strong);
   background: var(--accent-dim);
   border-color: var(--accent-line);
