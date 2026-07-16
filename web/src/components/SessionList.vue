@@ -36,8 +36,8 @@ const rowEnter = (i: number) =>
     <header class="sl-header">
       <div>
         <h1 class="sl-title no-select">porthole</h1>
-        <p v-if="loading && sessions.length === 0" class="sl-subtitle no-select">scanning · claude code</p>
-        <p v-else class="sl-subtitle no-select">{{ sessions.length }} session{{ sessions.length === 1 ? '' : 's' }} · claude code</p>
+        <p v-if="loading && sessions.length === 0" class="sl-subtitle no-select">scanning · claude + codex</p>
+        <p v-else class="sl-subtitle no-select">{{ sessions.length }} session{{ sessions.length === 1 ? '' : 's' }} · claude + codex</p>
       </div>
       <div class="sl-header-actions">
         <button class="sl-icon-btn" type="button" aria-label="tmux panes" @click="goToTmux()">
@@ -89,7 +89,7 @@ const rowEnter = (i: number) =>
           <circle cx="12" cy="12" r="9" />
           <path d="M3 12q9-4 18 0" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <p>no sessions yet.<br />start one with + below, or run claude in tmux.</p>
+        <p>no sessions yet.<br />start one with + below, or run claude or codex in tmux.</p>
       </div>
 
       <template v-else>
@@ -118,6 +118,7 @@ const rowEnter = (i: number) =>
                   <span>{{ s.eventCount }} events</span>
                 </span>
               </span>
+              <span v-if="s.provider === 'codex'" class="sl-tag mono no-select">codex</span>
               <span v-if="s.tmuxTarget" class="sl-badge mono no-select">{{ s.tmuxTarget }}</span>
             </button>
           </TransitionGroup>
@@ -148,6 +149,7 @@ const rowEnter = (i: number) =>
                   <span>{{ s.eventCount }} events</span>
                 </span>
               </span>
+              <span v-if="s.provider === 'codex'" class="sl-tag mono no-select">codex</span>
             </button>
           </TransitionGroup>
         </section>
@@ -385,6 +387,15 @@ const rowEnter = (i: number) =>
 
 .sl-skel-alt.sl-skel-meta {
   width: 28%;
+}
+
+.sl-tag {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  color: var(--ink-3);
 }
 
 .sl-badge {

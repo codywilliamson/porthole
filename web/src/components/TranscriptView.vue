@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { AskQuestion, PendingQuestionResponse, TranscriptEvent } from '../../../shared/types'
+import type { AskQuestion, PendingQuestionResponse, Provider, TranscriptEvent } from '../../../shared/types'
 import { useAutoScroll } from '../composables/useAutoScroll'
 import { useRoute } from '../composables/useRoute'
 import type { StreamStatus } from '../composables/useSessionStream'
@@ -8,9 +8,15 @@ import { groupEvents } from '../utils/transcript'
 import EventBlock from './EventBlock.vue'
 import QuestionCard from './QuestionCard.vue'
 
-const props = defineProps<{ events: TranscriptEvent[]; status: StreamStatus; active: boolean }>()
+// provider is null until the stream's init frame identifies the session
+const props = defineProps<{
+  events: TranscriptEvent[]
+  status: StreamStatus
+  active: boolean
+  provider: Provider | null
+}>()
 
-// claude is composing: session live and the newest event is ours. assistant
+// agent is composing: session live and the newest event is ours. assistant
 // blocks only hit the jsonl when they complete, so this gap is exactly the
 // "typing" window of a chat app.
 const typing = computed(() => {
@@ -103,10 +109,20 @@ watch(typing, (t, prev) => {
   if (t && !prev) onContentGrew()
 })
 
+// only claude sessions surface a picker — codex never does, so don't poll for it.
+// provider arrives with the stream's init frame, hence the watch instead of onMounted.
+watch(
+  () => props.provider,
+  (p) => {
+    if (p !== 'claude' || questionTimer) return
+    pollQuestion()
+    questionTimer = setInterval(pollQuestion, QUESTION_POLL_MS)
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   scrollToBottom(false)
-  pollQuestion()
-  questionTimer = setInterval(pollQuestion, QUESTION_POLL_MS)
 })
 
 onUnmounted(() => {
@@ -138,7 +154,7 @@ onUnmounted(() => {
           <span class="typing-dot" aria-hidden="true"></span>
           <span class="typing-dot" aria-hidden="true"></span>
           <span class="typing-dot" aria-hidden="true"></span>
-          <span class="visually-hidden">claude is working…</span>
+          <span class="visually-hidden">{{ provider || 'agent' }} is working…</span>
         </div>
       </Transition>
       <Transition name="qc-pop">
@@ -251,7 +267,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
 }
 
-/* typing bubble — claude-side chat bubble with a soft amber dot wave */
+/* typing bubble — agent-side chat bubble with a soft amber dot wave */
 .typing {
   display: inline-flex;
   align-items: center;

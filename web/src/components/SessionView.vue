@@ -14,6 +14,7 @@ const { events, session, active, tmuxTarget, status } = useSessionStream(props.s
 
 const title = computed(() => session.value?.title || 'session')
 const projectPath = computed(() => (session.value ? truncateMiddle(session.value.projectPath, 40) : ''))
+const provider = computed(() => session.value?.provider ?? null)
 
 // pane actions menu
 const menuOpen = ref(false)
@@ -75,7 +76,7 @@ async function closeWindow() {
 
       <div class="sv-heading">
         <h1 class="sv-title mono no-select">{{ title }}</h1>
-        <p v-if="projectPath" class="sv-path mono no-select">{{ projectPath }}</p>
+        <p v-if="projectPath" class="sv-path mono no-select">{{ projectPath }}{{ provider === 'codex' ? ' · codex' : '' }}</p>
       </div>
 
       <div class="sv-status">
@@ -159,7 +160,7 @@ async function closeWindow() {
           <p>session not found —<br />it may have been removed or compacted.</p>
           <button class="sv-gone-back" type="button" @click="goToList()">back to sessions</button>
         </div>
-        <TranscriptView v-else :events="events" :status="status" :active="active" />
+        <TranscriptView v-else :events="events" :status="status" :active="active" :provider="provider" />
       </Transition>
     </div>
 
