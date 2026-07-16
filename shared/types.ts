@@ -1,10 +1,14 @@
 // api contract between backend and frontend — single source of truth
 
+// which coding agent owns a session / pane
+export type Provider = 'claude' | 'codex'
+
 export interface SessionSummary {
-  id: string // session uuid (jsonl basename)
+  id: string // session uuid (jsonl basename for claude, rollout uuid for codex)
+  provider: Provider
   title: string // ai-title event if present, else first real user message truncated
   projectPath: string // real cwd from events, not decoded dir name
-  projectDir: string // ~/.claude/projects/<encoded> dir holding the jsonl
+  projectDir: string // dir holding the jsonl (~/.claude/projects/<encoded> or ~/.codex/sessions/<y>/<m>/<d>)
   lastModified: number // epoch ms
   eventCount: number
   active: boolean

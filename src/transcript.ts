@@ -172,7 +172,7 @@ function collapse(s: string): string {
   return s.replace(/\s+/g, ' ').trim()
 }
 
-function toTitle(raw: string): string {
+export function toTitle(raw: string): string {
   const s = collapse(raw)
   if (!s) return UNTITLED
   return s.length > TITLE_MAX ? s.slice(0, TITLE_MAX - 1) + '…' : s
@@ -261,6 +261,7 @@ export async function discoverSessions(projectsDir: string): Promise<DiscoveredS
           const meta = await getMeta(filePath, st.mtimeMs, st.size)
           return {
             id: basename(name, '.jsonl'),
+            provider: 'claude' as const,
             filePath,
             projectDir,
             // last real activity, not file mtime — fall back to mtime only when

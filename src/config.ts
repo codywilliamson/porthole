@@ -6,6 +6,7 @@ export const config = {
   port: Number(process.env.PORTHOLE_PORT ?? 4747),
   pollMs: Number(process.env.PORTHOLE_POLL_MS ?? 2000),
   projectsDir: process.env.PORTHOLE_PROJECTS_DIR ?? `${os.homedir()}/.claude/projects`,
+  codexDir: process.env.PORTHOLE_CODEX_DIR ?? `${os.homedir()}/.codex/sessions`,
   // launcher boundary: only dirs under here (or known project paths) are launchable
   rootDir: process.env.PORTHOLE_ROOT ?? `${os.homedir()}/dev`,
   // optional dns-rebinding defense: comma-separated host[:port] allowlist for the Host header

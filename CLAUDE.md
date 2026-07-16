@@ -5,7 +5,9 @@ over Tailscale.
 
 ## module map (SRP)
 
-- `src/transcript.ts` — session discovery + jsonl parsing. no tmux/process knowledge.
+- `src/transcript.ts` — claude session discovery + jsonl parsing. no tmux/process knowledge.
+- `src/codex.ts` — codex cli session discovery + rollout jsonl parsing. same rules as
+  `transcript.ts`, maps codex events onto the shared `TranscriptEvent` union.
 - `src/activity.ts` — tmux/process correlation, active detection, session -> tmux target
   mapping. consumes `tmux.listPanes()`, never spawns tmux itself.
 - `src/tmux.ts` — the ONLY module that spawns tmux. injection + resume.
@@ -38,6 +40,7 @@ bun run typecheck # vue-tsc --noEmit
 - `PORTHOLE_PORT` (default `4747`)
 - `PORTHOLE_POLL_MS` (default `2000`)
 - `PORTHOLE_PROJECTS_DIR` (default `~/.claude/projects`)
+- `PORTHOLE_CODEX_DIR` (default `~/.codex/sessions`)
 - `PORTHOLE_ALLOWED_HOSTS` (default empty = any; comma-separated `host:port` allowlist)
 
 ## HARD INVARIANTS
