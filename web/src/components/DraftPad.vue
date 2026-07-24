@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useDraft } from '../composables/useDraft'
+import { nudge } from '../composables/useLauncher'
 
-const props = defineProps<{ sessionId: string; active: boolean }>()
+const props = defineProps<{ sessionId: string; active: boolean; tmuxTarget: string | null }>()
 
 const { draft, clear } = useDraft(props.sessionId)
 
@@ -63,6 +64,19 @@ async function send() {
   }
 }
 
+// one-tap interrupt — Escape stops a running agent (safe when idle)
+const stopped = ref(false)
+async function stop() {
+  if (!props.tmuxTarget) return
+  try {
+    await nudge(props.tmuxTarget, 'escape')
+    stopped.value = true
+    setTimeout(() => (stopped.value = false), 1600)
+  } catch (err) {
+    flashError(err instanceof Error ? err.message : 'stop failed')
+  }
+}
+
 async function resume() {
   if (resuming.value) return
   resuming.value = true
@@ -99,6 +113,18 @@ async function resume() {
       @input="autoGrow"
     ></textarea>
     <div class="draft-actions">
+      <button
+        v-if="active && tmuxTarget"
+        class="draft-btn draft-btn-stop"
+        type="button"
+        aria-label="stop — interrupt the agent"
+        @click="stop"
+      >
+        <svg class="draft-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="7" y="7" width="10" height="10" rx="1.5" stroke-linejoin="round" />
+        </svg>
+        {{ stopped ? 'sent' : 'stop' }}
+      </button>
       <button class="draft-btn draft-btn-ghost" type="button" :disabled="!draft" @click="copy">
         {{ copied ? 'copied' : 'copy' }}
       </button>
@@ -177,6 +203,14 @@ async function resume() {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+/* stop sits alone on the left — the rescue action, away from send */
+.draft-btn-stop {
+  margin-right: auto;
+  background: var(--danger-dim);
+  border-color: var(--danger-line);
+  color: var(--danger);
 }
 
 .draft-btn {
