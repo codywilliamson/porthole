@@ -13,6 +13,18 @@ export interface SessionSummary {
   eventCount: number
   active: boolean
   tmuxTarget: string | null // session:window.pane when active
+  model: string | null // raw model id from the transcript
+  contextTokens: number | null // tokens in the live context (last turn)
+  contextWindow: number | null // codex exact; claude 200k heuristic, ratchets to 1m
+}
+
+// SSE `status` event — active/target plus live stats for the open session
+export interface StatusPayload {
+  active: boolean
+  tmuxTarget: string | null
+  model: string | null
+  contextTokens: number | null
+  contextWindow: number | null
 }
 
 // transcript events, folded from raw jsonl lines

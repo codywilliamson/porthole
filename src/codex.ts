@@ -14,6 +14,11 @@ interface RawLine {
   payload?: Payload
 }
 
+interface TokenInfo {
+  last_token_usage?: { total_tokens?: number }
+  model_context_window?: number
+}
+
 interface Payload {
   type?: string
   // session_meta
@@ -23,6 +28,10 @@ interface Payload {
   originator?: string
   // event_msg user_message
   message?: string
+  // event_msg token_count
+  info?: TokenInfo
+  // turn_context
+  model?: string
   // response_item message / reasoning
   role?: string
   content?: unknown
@@ -160,6 +169,9 @@ interface Meta {
   entrypoint: string
   eventCount: number
   lastEventTime: number
+  model: string | null
+  contextTokens: number | null
+  contextWindow: number | null
 }
 
 interface CacheEntry extends Meta {
@@ -175,6 +187,9 @@ function deriveMeta(raw: string): Meta {
   let entrypoint = ''
   let eventCount = 0
   let lastEventTime = 0
+  let model: string | null = null
+  let contextTokens: number | null = null
+  let contextWindow: number | null = null
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed) continue
@@ -189,8 +204,16 @@ function deriveMeta(raw: string): Meta {
       // 'cli' = interactive tui that can own a pane; vscode/exec sessions can't
       if (typeof obj.payload.source === 'string') entrypoint = obj.payload.source
     }
-    if (!projectPath && obj?.type === 'turn_context' && typeof obj.payload?.cwd === 'string') {
-      projectPath = obj.payload.cwd
+    if (obj?.type === 'turn_context') {
+      if (!projectPath && typeof obj.payload?.cwd === 'string') projectPath = obj.payload.cwd
+      if (typeof obj.payload?.model === 'string' && obj.payload.model) model = obj.payload.model
+    }
+    // token_count carries the live context size — last one wins
+    if (obj?.type === 'event_msg' && obj.payload?.type === 'token_count') {
+      const info = obj.payload.info
+      const used = info?.last_token_usage?.total_tokens
+      if (typeof used === 'number' && used > 0) contextTokens = used
+      if (typeof info?.model_context_window === 'number') contextWindow = info.model_context_window
     }
     if (typeof obj?.timestamp === 'string') {
       const t = Date.parse(obj.timestamp)
@@ -203,7 +226,16 @@ function deriveMeta(raw: string): Meta {
       if (um) firstUserText = um.text
     }
   }
-  return { title: toTitle(firstUserText), projectPath, entrypoint, eventCount, lastEventTime }
+  return {
+    title: toTitle(firstUserText),
+    projectPath,
+    entrypoint,
+    eventCount,
+    lastEventTime,
+    model,
+    contextTokens,
+    contextWindow: contextTokens === null ? null : contextWindow,
+  }
 }
 
 async function getMeta(filePath: string, mtimeMs: number, size: number): Promise<Meta> {
@@ -274,6 +306,9 @@ export async function discoverCodexSessions(sessionsDir: string): Promise<Discov
           projectPath: meta.projectPath,
           entrypoint: meta.entrypoint,
           title: threadName ? toTitle(threadName) : meta.title,
+          model: meta.model,
+          contextTokens: meta.contextTokens,
+          contextWindow: meta.contextWindow,
         }
       }),
   )

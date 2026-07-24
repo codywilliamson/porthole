@@ -36,7 +36,13 @@ interface RawLine {
   isMeta?: boolean
   aiTitle?: string
   entrypoint?: string
-  message?: { role?: string; content?: unknown }
+  message?: { role?: string; content?: unknown; model?: string; usage?: Usage }
+}
+
+interface Usage {
+  input_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
 }
 
 interface ContentBlock {
@@ -62,7 +68,15 @@ interface Meta {
   // (last-prompt/mode/permission-mode/ai-title) long after a convo ends, so an
   // idle session's file gets touched "now" while its last event is days old.
   lastEventTime: number
+  model: string | null
+  contextTokens: number | null
+  contextWindow: number | null
 }
+
+// the jsonl never records the window size — assume 200k, ratchet to 1m once the
+// observed context provably exceeds it ([1m] sessions look identical otherwise)
+const CLAUDE_WINDOW = 200_000
+const CLAUDE_WINDOW_1M = 1_000_000
 
 interface CacheEntry extends Meta {
   mtimeMs: number
@@ -186,6 +200,9 @@ function deriveMeta(raw: string): Meta {
   let entrypoint = ''
   let eventCount = 0
   let lastEventTime = 0
+  let model: string | null = null
+  let contextTokens: number | null = null
+  let maxContextTokens = 0
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed) continue
@@ -198,6 +215,21 @@ function deriveMeta(raw: string): Meta {
     if (obj?.type === 'ai-title' && typeof obj.aiTitle === 'string') lastTitle = obj.aiTitle
     if (!projectPath && typeof obj?.cwd === 'string' && obj.cwd) projectPath = obj.cwd
     if (!entrypoint && typeof obj?.entrypoint === 'string' && obj.entrypoint) entrypoint = obj.entrypoint
+    // last assistant turn's usage = current live context size; sidechains excluded
+    if (obj?.type === 'assistant' && obj.isSidechain !== true && obj.message) {
+      if (typeof obj.message.model === 'string' && obj.message.model) model = obj.message.model
+      const u = obj.message.usage
+      if (u && typeof u === 'object') {
+        const used =
+          (typeof u.input_tokens === 'number' ? u.input_tokens : 0) +
+          (typeof u.cache_creation_input_tokens === 'number' ? u.cache_creation_input_tokens : 0) +
+          (typeof u.cache_read_input_tokens === 'number' ? u.cache_read_input_tokens : 0)
+        if (used > 0) {
+          contextTokens = used
+          if (used > maxContextTokens) maxContextTokens = used
+        }
+      }
+    }
     // real convo/tool/system lines carry a timestamp; bookkeeping lines don't
     if (typeof obj?.timestamp === 'string') {
       const t = Date.parse(obj.timestamp)
@@ -216,6 +248,10 @@ function deriveMeta(raw: string): Meta {
     entrypoint,
     eventCount,
     lastEventTime,
+    model,
+    contextTokens,
+    contextWindow:
+      contextTokens === null ? null : maxContextTokens > CLAUDE_WINDOW ? CLAUDE_WINDOW_1M : CLAUDE_WINDOW,
   }
 }
 
@@ -271,6 +307,9 @@ export async function discoverSessions(projectsDir: string): Promise<DiscoveredS
             projectPath: meta.projectPath,
             entrypoint: meta.entrypoint,
             title: meta.title,
+            model: meta.model,
+            contextTokens: meta.contextTokens,
+            contextWindow: meta.contextWindow,
           }
         }),
       )

@@ -17,7 +17,7 @@ import {
   type TmuxKey,
 } from './tmux'
 import { knownProjects, listDirs, isLaunchableDir } from './projects'
-import type { SessionSummary, TranscriptEvent, NudgeKey, AskQuestion } from '../shared/types'
+import type { SessionSummary, TranscriptEvent, NudgeKey, AskQuestion, StatusPayload } from '../shared/types'
 
 // tuning knobs
 const HEARTBEAT_MS = 15_000
@@ -181,8 +181,13 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
   let statusTimer: ReturnType<typeof setInterval> | null = null
   let checkTimer: ReturnType<typeof setTimeout> | null = null
 
-  let lastActive = summary.active
-  let lastTarget = summary.tmuxTarget
+  let lastStatus: StatusPayload = {
+    active: summary.active,
+    tmuxTarget: summary.tmuxTarget,
+    model: summary.model,
+    contextTokens: summary.contextTokens,
+    contextWindow: summary.contextWindow,
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -242,13 +247,24 @@ function streamSession(session: DiscoveredSession, summary: SessionSummary, sign
       const checkStatus = async () => {
         if (closed) return
         const { sessions, targets } = await loadSessions()
-        if (!sessions.some((s) => s.id === session.id)) return
-        const active = targets.has(session.id)
-        const tmuxTarget = targets.get(session.id) ?? null
-        if (active !== lastActive || tmuxTarget !== lastTarget) {
-          lastActive = active
-          lastTarget = tmuxTarget
-          send('status', { active, tmuxTarget })
+        const fresh = sessions.find((s) => s.id === session.id)
+        if (!fresh) return
+        const next: StatusPayload = {
+          active: targets.has(session.id),
+          tmuxTarget: targets.get(session.id) ?? null,
+          model: fresh.model,
+          contextTokens: fresh.contextTokens,
+          contextWindow: fresh.contextWindow,
+        }
+        if (
+          next.active !== lastStatus.active ||
+          next.tmuxTarget !== lastStatus.tmuxTarget ||
+          next.model !== lastStatus.model ||
+          next.contextTokens !== lastStatus.contextTokens ||
+          next.contextWindow !== lastStatus.contextWindow
+        ) {
+          lastStatus = next
+          send('status', next)
         }
       }
 
