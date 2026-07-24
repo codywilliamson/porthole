@@ -1,5 +1,5 @@
 import { onUnmounted, ref } from 'vue'
-import type { SessionSummary, TranscriptEvent } from '../../../shared/types'
+import type { SessionSummary, StatusPayload, TranscriptEvent } from '../../../shared/types'
 
 // 'gone' = the stream failed permanently (404 session not found / removed) —
 // EventSource won't retry, so we surface a dead-end state instead of a
@@ -11,11 +11,6 @@ interface InitPayload {
   events: TranscriptEvent[]
 }
 
-interface StatusPayload {
-  active: boolean
-  tmuxTarget: string | null
-}
-
 // owns the EventSource lifecycle for one session id — mount a fresh instance
 // per session (key the consuming component on the id) so teardown is automatic
 export function useSessionStream(sessionId: string) {
@@ -23,14 +18,24 @@ export function useSessionStream(sessionId: string) {
   const session = ref<SessionSummary | null>(null)
   const active = ref(false)
   const tmuxTarget = ref<string | null>(null)
+  const model = ref<string | null>(null)
+  const contextTokens = ref<number | null>(null)
+  const contextWindow = ref<number | null>(null)
   const status = ref<StreamStatus>('connecting')
 
   const source = new EventSource(`/api/sessions/${encodeURIComponent(sessionId)}/stream`)
 
-  function applySession(next: SessionSummary) {
-    session.value = next
+  function applyStatus(next: StatusPayload) {
     active.value = next.active
     tmuxTarget.value = next.tmuxTarget
+    model.value = next.model
+    contextTokens.value = next.contextTokens
+    contextWindow.value = next.contextWindow
+  }
+
+  function applySession(next: SessionSummary) {
+    session.value = next
+    applyStatus(next)
   }
 
   source.addEventListener('init', (e) => {
@@ -53,9 +58,7 @@ export function useSessionStream(sessionId: string) {
   })
 
   source.addEventListener('status', (e) => {
-    const data = JSON.parse((e as MessageEvent).data) as StatusPayload
-    active.value = data.active
-    tmuxTarget.value = data.tmuxTarget
+    applyStatus(JSON.parse((e as MessageEvent).data) as StatusPayload)
   })
 
   source.onopen = () => {
@@ -70,5 +73,5 @@ export function useSessionStream(sessionId: string) {
     source.close()
   })
 
-  return { events, session, active, tmuxTarget, status }
+  return { events, session, active, tmuxTarget, model, contextTokens, contextWindow, status }
 }

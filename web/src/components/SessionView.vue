@@ -3,18 +3,26 @@ import { computed, ref } from 'vue'
 import { useSessionStream } from '../composables/useSessionStream'
 import { nudge } from '../composables/useLauncher'
 import { goToList } from '../composables/useRoute'
-import { truncateMiddle } from '../utils/format'
+import { contextPressure, shortModel, shortTokens, truncateMiddle } from '../utils/format'
 import type { NudgeKey } from '../../../shared/types'
 import TranscriptView from './TranscriptView.vue'
 import DraftPad from './DraftPad.vue'
 
 const props = defineProps<{ sessionId: string }>()
 
-const { events, session, active, tmuxTarget, status } = useSessionStream(props.sessionId)
+const { events, session, active, tmuxTarget, model, contextTokens, contextWindow, status } =
+  useSessionStream(props.sessionId)
 
 const title = computed(() => session.value?.title || 'session')
 const projectPath = computed(() => (session.value ? truncateMiddle(session.value.projectPath, 40) : ''))
 const provider = computed(() => session.value?.provider ?? null)
+
+// context pressure readout — null until both numbers are known
+const contextPct = computed(() => {
+  if (contextTokens.value === null || !contextWindow.value) return null
+  return Math.min(100, Math.round((contextTokens.value / contextWindow.value) * 100))
+})
+const pressure = computed(() => (contextPct.value === null ? 'calm' : contextPressure(contextPct.value)))
 
 // pane actions menu
 const menuOpen = ref(false)
@@ -143,6 +151,17 @@ async function closeWindow() {
       </div>
     </header>
 
+    <div v-if="model || contextPct !== null" class="sv-statusline mono no-select">
+      <span v-if="model" class="sv-sl-model">{{ shortModel(model) }}</span>
+      <template v-if="contextPct !== null">
+        <span class="sv-sl-bar" role="img" :aria-label="`context ${contextPct}% used`">
+          <span class="sv-sl-fill" :class="`sv-sl-${pressure}`" :style="{ width: `${contextPct}%` }"></span>
+        </span>
+        <span class="sv-sl-pct" :class="`sv-sl-ink-${pressure}`">{{ contextPct }}%</span>
+        <span class="sv-sl-tokens">{{ shortTokens(contextTokens!) }}/{{ shortTokens(contextWindow!) }}</span>
+      </template>
+    </div>
+
     <p v-if="actionError" class="sv-stream-banner sv-action-error">{{ actionError }}</p>
 
     <p v-if="status === 'reconnecting'" class="sv-stream-banner sv-stream-banner-warn">
@@ -164,7 +183,7 @@ async function closeWindow() {
       </Transition>
     </div>
 
-    <DraftPad v-if="status !== 'gone'" :session-id="sessionId" :active="active" />
+    <DraftPad v-if="status !== 'gone'" :session-id="sessionId" :active="active" :tmux-target="tmuxTarget" />
   </div>
 </template>
 
@@ -395,6 +414,66 @@ async function closeWindow() {
   }
 }
 
+.sv-statusline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) calc(var(--space-4) + var(--safe-right)) var(--space-1)
+    calc(var(--space-4) + var(--safe-left));
+  border-bottom: 1px solid var(--line);
+  background: var(--glass);
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
+
+.sv-sl-model {
+  flex: 0 0 auto;
+  color: var(--ink-2);
+}
+
+.sv-sl-bar {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.sv-sl-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width 0.5s ease, background 0.5s ease;
+}
+
+.sv-sl-calm {
+  background: var(--teal);
+}
+
+.sv-sl-warm {
+  background: var(--accent);
+}
+
+.sv-sl-hot {
+  background: var(--danger);
+}
+
+.sv-sl-pct {
+  flex: 0 0 auto;
+}
+
+.sv-sl-ink-warm {
+  color: var(--accent-strong);
+}
+
+.sv-sl-ink-hot {
+  color: var(--danger);
+}
+
+.sv-sl-tokens {
+  flex: 0 0 auto;
+}
+
 .sv-stream-banner {
   font-size: var(--text-xs);
   text-align: center;
@@ -453,6 +532,9 @@ async function closeWindow() {
 @media (prefers-reduced-motion: reduce) {
   .sv-dot {
     animation: none;
+  }
+  .sv-sl-fill {
+    transition: none;
   }
   .sv-menu-pop-enter-active,
   .sv-menu-pop-leave-active {

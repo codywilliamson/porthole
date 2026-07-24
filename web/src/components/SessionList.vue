@@ -2,8 +2,15 @@
 import { computed, ref } from 'vue'
 import { useSessions, listAnimated } from '../composables/useSessions'
 import { goToSession, goToTmux } from '../composables/useRoute'
-import { relativeTime, truncateMiddle } from '../utils/format'
+import { contextPressure, relativeTime, truncateMiddle } from '../utils/format'
+import type { SessionSummary } from '../../../shared/types'
 import LauncherSheet from './LauncherSheet.vue'
+
+// context % for the card meta row — null when the session has no usage data
+function ctxPct(s: SessionSummary): number | null {
+  if (s.contextTokens === null || !s.contextWindow) return null
+  return Math.min(100, Math.round((s.contextTokens / s.contextWindow) * 100))
+}
 
 const { sessions, loading, error, refresh } = useSessions()
 
@@ -116,6 +123,10 @@ const rowEnter = (i: number) =>
                   <span>{{ relativeTime(s.lastModified) }}</span>
                   <span class="sl-dot-sep">·</span>
                   <span>{{ s.eventCount }} events</span>
+                  <template v-if="ctxPct(s) !== null">
+                    <span class="sl-dot-sep">·</span>
+                    <span :class="`sl-ctx-${contextPressure(ctxPct(s)!)}`">{{ ctxPct(s) }}% ctx</span>
+                  </template>
                 </span>
               </span>
               <span v-if="s.provider === 'codex'" class="sl-tag mono no-select">codex</span>
@@ -147,6 +158,10 @@ const rowEnter = (i: number) =>
                   <span>{{ relativeTime(s.lastModified) }}</span>
                   <span class="sl-dot-sep">·</span>
                   <span>{{ s.eventCount }} events</span>
+                  <template v-if="ctxPct(s) !== null">
+                    <span class="sl-dot-sep">·</span>
+                    <span :class="`sl-ctx-${contextPressure(ctxPct(s)!)}`">{{ ctxPct(s) }}% ctx</span>
+                  </template>
                 </span>
               </span>
               <span v-if="s.provider === 'codex'" class="sl-tag mono no-select">codex</span>
@@ -357,6 +372,15 @@ const rowEnter = (i: number) =>
   align-items: center;
   white-space: nowrap;
   overflow: hidden;
+}
+
+/* context pressure ramp — calm stays meta-toned */
+.sl-ctx-warm {
+  color: var(--accent-strong);
+}
+
+.sl-ctx-hot {
+  color: var(--danger);
 }
 
 .sl-path {

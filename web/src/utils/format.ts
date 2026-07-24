@@ -20,6 +20,23 @@ export function relativeTime(epochMs: number): string {
   return `${day}d ago`
 }
 
+// "claude-fable-5" → "fable-5"; codex ids shown as-is
+export function shortModel(model: string): string {
+  return model.replace(/^claude-/, '')
+}
+
+// 115020 → "115k", 950 → "950"
+export function shortTokens(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+}
+
+// context pressure bucket for color ramping: calm < 60 ≤ warm < 85 ≤ hot
+export function contextPressure(pct: number): 'calm' | 'warm' | 'hot' {
+  if (pct >= 85) return 'hot'
+  if (pct >= 60) return 'warm'
+  return 'calm'
+}
+
 // one-line hint for a tool_use input, e.g. a truncated bash command or file path
 export function toolHint(input: unknown): string {
   if (input && typeof input === 'object' && !Array.isArray(input)) {
