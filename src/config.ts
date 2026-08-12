@@ -7,6 +7,10 @@ export const config = {
   pollMs: Number(process.env.PORTHOLE_POLL_MS ?? 2000),
   projectsDir: process.env.PORTHOLE_PROJECTS_DIR ?? `${os.homedir()}/.claude/projects`,
   codexDir: process.env.PORTHOLE_CODEX_DIR ?? `${os.homedir()}/.codex/sessions`,
+  // claude's live-session registry: <pid>.json holding the authoritative sessionId
+  // for each running cli process. the only exact pane->session signal we get.
+  claudeSessionsDir:
+    process.env.PORTHOLE_CLAUDE_SESSIONS_DIR ?? `${os.homedir()}/.claude/sessions`,
   // launcher boundary: only dirs under here (or known project paths) are launchable
   rootDir: process.env.PORTHOLE_ROOT ?? `${os.homedir()}/dev`,
   // optional dns-rebinding defense: comma-separated host[:port] allowlist for the Host header

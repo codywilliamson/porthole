@@ -41,6 +41,8 @@ bun run typecheck # vue-tsc --noEmit
 - `PORTHOLE_POLL_MS` (default `2000`)
 - `PORTHOLE_PROJECTS_DIR` (default `~/.claude/projects`)
 - `PORTHOLE_CODEX_DIR` (default `~/.codex/sessions`)
+- `PORTHOLE_CLAUDE_SESSIONS_DIR` (default `~/.claude/sessions`) — claude's live-session
+  registry; the authoritative pane -> session signal
 - `PORTHOLE_ALLOWED_HOSTS` (default empty = any; comma-separated `host:port` allowlist)
 
 ## HARD INVARIANTS
@@ -59,13 +61,25 @@ Claude Code can show up as tmux `pane_current_command` `"node"` OR native `"clau
 **never match on the pane command**. Walk the pane_pid's descendant process tree
 (`/proc`) looking for a claude process (comm `claude`, or argv0/argv1 basename `claude`).
 
-The claude process does **not** reliably keep its `.jsonl` fd open, so fd-matching
-(`/proc/<pid>/fd`) is best-effort only, tried first as an exact match. The reliable
-signal is: claude-process cwd -> session `projectPath` -> newest `.jsonl` in that
-project dir, **filtered to `entrypoint: "cli"` sessions**. Hook/SDK side sessions
-(security reviews, /gac analyzers — `entrypoint: "sdk-py"` etc) write jsonl into the
-same project dir and frequently become the newest file; without the cli filter they
-steal the pane mapping and the real session flips "inactive" mid-use.
+For **claude**, the authoritative mapping is `~/.claude/sessions/<pid>.json`, which the
+running process publishes and keeps current (it tracks `/clear`): it carries the exact
+`sessionId`, plus `procStart` — compare that against `/proc/<pid>/stat` field 22 to
+reject a recycled pid. Compose it with the proc-tree walk (pid -> pane) and the mapping
+is exact, no heuristics. Filter to `entrypoint: "cli"`; hook/SDK side sessions
+(security reviews, /gac analyzers — `entrypoint: "sdk-py"` etc) also register but can
+never own a pane.
+
+Everything below that is fallback, for codex and for claude too old to register:
+
+- fd-matching (`/proc/<pid>/fd`) — claude does **not** reliably keep its `.jsonl` fd
+  open (usually holds none at all), so this is best-effort only.
+- cwd -> `projectPath` -> newest `.jsonl` in that project dir, filtered to `cli`.
+  **This one is actively unsafe with 2+ agent panes sharing one cwd**: it pairs
+  candidates sorted by `lastModified` against panes sorted by target name, so the
+  pairing is arbitrary and reshuffles on every event. It silently routed phone replies
+  into a neighbouring session's composer — the send succeeds, tmux exits 0, and the
+  draft is gone. Never let this path decide a mapping it could get wrong; prefer
+  reporting inactive.
 
 jsonl schema drifts across Claude Code versions — parse defensively (`transcript.ts`'s
 `eventsFromObj`), unknown event types are silently ignored, never thrown on.

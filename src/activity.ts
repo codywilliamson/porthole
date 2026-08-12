@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync, readlinkSync } from 'node:fs'
 import type { Provider } from '../shared/types'
 import type { DiscoveredSession } from './transcript'
+import { config } from './config'
 import { listPanes, type Pane } from './tmux'
 
 const PROC = '/proc'
@@ -13,6 +14,7 @@ interface ProcInfo {
   pid: number
   ppid: number
   comm: string
+  starttime: string // /proc stat field 22, raw ticks — identifies a pid incarnation
 }
 
 // parse /proc/<pid>/stat: comm may contain spaces/parens, so split on the LAST ')'
@@ -23,10 +25,10 @@ function readStat(pid: number): ProcInfo | null {
     const close = stat.lastIndexOf(')')
     if (open < 0 || close < 0) return null
     const comm = stat.slice(open + 1, close)
-    // after ") " fields are: state ppid ...
+    // after ") " fields are: state ppid ... starttime is stat field 22 → index 19
     const rest = stat.slice(close + 2).split(' ')
     const ppid = Number(rest[1])
-    return { pid, ppid, comm }
+    return { pid, ppid, comm, starttime: rest[19] ?? '' }
   } catch {
     return null // permission / vanished → skip
   }
@@ -130,6 +132,43 @@ function fdSessionMatch(
   return null
 }
 
+// claude's live-session registry: ~/.claude/sessions/<pid>.json, rewritten by the
+// running process (so it tracks /clear). gives an EXACT pid -> sessionId link —
+// the only non-heuristic signal available, since claude keeps no jsonl fd open.
+interface LiveClaudeSession {
+  pid: number
+  sessionId: string
+  procStart: string // guards against pid reuse
+  entrypoint: string
+}
+
+function readClaudeRegistry(): LiveClaudeSession[] {
+  let names: string[]
+  try {
+    names = readdirSync(config.claudeSessionsDir)
+  } catch {
+    return [] // no registry (older claude) → heuristic passes below carry it
+  }
+  const out: LiveClaudeSession[] = []
+  for (const name of names) {
+    if (!name.endsWith('.json')) continue
+    let raw: Record<string, unknown>
+    try {
+      raw = JSON.parse(readFileSync(`${config.claudeSessionsDir}/${name}`, 'utf8'))
+    } catch {
+      continue // stale or half-written → skip
+    }
+    if (typeof raw.sessionId !== 'string' || typeof raw.pid !== 'number') continue
+    out.push({
+      pid: raw.pid,
+      sessionId: raw.sessionId.toLowerCase(),
+      procStart: String(raw.procStart ?? ''),
+      entrypoint: String(raw.entrypoint ?? ''),
+    })
+  }
+  return out
+}
+
 // which agent (if any) runs in a live pane's process tree?
 // works before the session's jsonl exists — used to gate nudges.
 export async function paneAgent(target: string): Promise<Provider | null> {
@@ -191,9 +230,28 @@ export async function getActiveTargets(
     claims.push({ pane, agentPid: found.pid, provider: found.provider, cwd })
   }
 
+  // pass 0: claude's own registry — exact pid -> sessionId, so panes sharing a cwd
+  // can never be cross-wired. only claude publishes this; codex falls through.
+  const claimByPid = new Map(claims.map((c) => [c.agentPid, c]))
+  const resolvedPids = new Set<number>()
+  for (const live of readClaudeRegistry()) {
+    // sdk/hook side sessions share the cwd but never own a pane
+    if (live.entrypoint !== 'cli') continue
+    const claim = claimByPid.get(live.pid)
+    if (!claim || claim.provider !== 'claude') continue // dead pid, or not a claude pane
+    const info = table.get(live.pid)
+    // stale file whose pid has been recycled by an unrelated process
+    if (live.procStart && info && info.starttime !== live.procStart) continue
+    if (!byId.has(live.sessionId) || usedSessions.has(live.sessionId)) continue
+    result.set(live.sessionId, claim.pane.target)
+    usedSessions.add(live.sessionId)
+    resolvedPids.add(live.pid)
+  }
+
   // pass 1: exact fd matches take priority
   const unresolved: Claim[] = []
   for (const claim of claims) {
+    if (resolvedPids.has(claim.agentPid)) continue
     const sid = fdSessionMatch(claim.agentPid, claim.provider, byId)
     if (sid && !usedSessions.has(sid)) {
       result.set(sid, claim.pane.target)
@@ -203,10 +261,15 @@ export async function getActiveTargets(
     }
   }
 
-  // pass 2: cwd matching within a provider. group panes by provider+cwd so multiple
-  // agent panes in the SAME cwd get DISTINCT sessions — heuristic: sort candidate
-  // sessions by lastModified desc, sort panes by target, pair one-to-one; leftover
-  // panes get nothing.
+  // pass 2: last-resort cwd matching (codex, or claude too old for the registry).
+  // group panes by provider+cwd so multiple agent panes in the SAME cwd get DISTINCT
+  // sessions — sort candidates by lastModified desc, sort panes by target, pair
+  // one-to-one; leftover panes get nothing.
+  //
+  // CAVEAT: the two sort orders are unrelated, so with 2+ panes in one cwd the
+  // pairing is arbitrary AND reshuffles whenever a session writes an event — that
+  // silently routed replies into the wrong pane before pass 0 existed. claude is
+  // now exact; only codex still leans on this.
   const byCwd = new Map<string, Claim[]>()
   for (const claim of unresolved) {
     const key = `${claim.provider}\0${claim.cwd}`
