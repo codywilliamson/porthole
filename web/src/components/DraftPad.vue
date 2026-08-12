@@ -1,11 +1,51 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDraft } from '../composables/useDraft'
 import { nudge } from '../composables/useLauncher'
+import type { TranscriptEvent } from '../../../shared/types'
 
-const props = defineProps<{ sessionId: string; active: boolean; tmuxTarget: string | null }>()
+const props = defineProps<{
+  sessionId: string
+  active: boolean
+  tmuxTarget: string | null
+  events: TranscriptEvent[]
+}>()
 
-const { draft, clear } = useDraft(props.sessionId)
+const { draft, pending, markSent, confirmSent, restorePending } = useDraft(props.sessionId)
+
+// how long a sent message may go unseen before we call it out as probably misrouted
+const CONFIRM_GRACE_MS = 25_000
+const overdue = ref(false)
+let overdueTimer: ReturnType<typeof setTimeout> | undefined
+
+function startOverdueWatch() {
+  clearTimeout(overdueTimer)
+  overdue.value = false
+  if (!pending.value) return
+  overdueTimer = setTimeout(() => (overdue.value = true), CONFIRM_GRACE_MS)
+}
+
+// whitespace-insensitive: the tui reflows a paste, the jsonl keeps the text verbatim
+const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+
+watch(
+  () => props.events,
+  (events) => {
+    if (!pending.value) return
+    const needle = norm(pending.value)
+    if (!needle) return confirmSent()
+    const seen = events.some((e) => e.kind === 'user_message' && norm(e.text).includes(needle))
+    if (seen) {
+      confirmSent()
+      clearTimeout(overdueTimer)
+      overdue.value = false
+    }
+  },
+  { deep: false, immediate: true },
+)
+
+onMounted(startOverdueWatch)
+onUnmounted(() => clearTimeout(overdueTimer))
 
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
 const sending = ref(false)
@@ -56,7 +96,9 @@ async function send() {
       return
     }
     if (!res.ok) throw new Error(`send failed (${res.status})`)
-    clear()
+    // held, not dropped — cleared once the transcript echoes it back
+    markSent()
+    startOverdueWatch()
   } catch (err) {
     flashError(err instanceof Error ? err.message : 'send failed')
   } finally {
@@ -104,6 +146,15 @@ async function resume() {
 <template>
   <div class="draft-pad">
     <p v-if="errorMsg" class="draft-error">{{ errorMsg }}</p>
+    <div v-if="pending" class="draft-pending" :class="{ 'draft-pending-overdue': overdue }">
+      <p class="draft-pending-text mono">{{ pending }}</p>
+      <p class="draft-pending-note">
+        {{ overdue ? 'not seen in this session yet — it may have gone elsewhere' : 'sent · waiting for it to appear' }}
+      </p>
+      <button class="draft-pending-restore" type="button" @click="restorePending">
+        put it back in the box
+      </button>
+    </div>
     <textarea
       ref="textareaEl"
       v-model="draft"
@@ -172,6 +223,51 @@ async function resume() {
 .draft-error {
   color: var(--danger);
   font-size: var(--text-xs);
+}
+
+/* a sent-but-unconfirmed message: visible and recoverable, never silently dropped */
+.draft-pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent-line);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+}
+
+.draft-pending-overdue {
+  border-left-color: var(--danger);
+}
+
+.draft-pending-text {
+  font-size: var(--text-xs);
+  color: var(--ink-2);
+  line-height: 1.5;
+  max-height: 4.5em;
+  overflow: hidden;
+}
+
+.draft-pending-note {
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
+
+.draft-pending-overdue .draft-pending-note {
+  color: var(--danger);
+}
+
+.draft-pending-restore {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--ink-1);
+  font-size: var(--text-xs);
+  cursor: pointer;
 }
 
 .draft-textarea {

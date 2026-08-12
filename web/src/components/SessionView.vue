@@ -183,7 +183,13 @@ async function closeWindow() {
       </Transition>
     </div>
 
-    <DraftPad v-if="status !== 'gone'" :session-id="sessionId" :active="active" :tmux-target="tmuxTarget" />
+    <DraftPad
+      v-if="status !== 'gone'"
+      :session-id="sessionId"
+      :active="active"
+      :tmux-target="tmuxTarget"
+      :events="events"
+    />
   </div>
 </template>
 
